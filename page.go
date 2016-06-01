@@ -12,15 +12,18 @@ import (
 	"github.com/jarrancarr/website/html"
 )
 
+type postFunc func(w http.ResponseWriter, r *http.Request)
+
 type Page struct {
-	Title        string
-	Body         map[string]string
-	Site         *Site
-	requireLogin bool
-	menus        *html.MenuIndex
-	tables       *html.TableIndex
-	tmpl         *template.Template
-	pages        map[string]*Page
+	Title      string
+	Body       map[string]string
+	Site       *Site
+	postHandle map[string]postFunc
+	secure     bool
+	menus      *html.MenuIndex
+	tables     *html.TableIndex
+	tmpl       *template.Template
+	pages      *PageIndex
 }
 
 type PageIndex struct {
@@ -35,7 +38,7 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if page.requireLogin {
+	if page.secure {
 		sessionCookie, err := r.Cookie(page.Site.SessionCookie)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -46,34 +49,43 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	err := page.tmpl.Execute(w, page)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if r.Method == "POST" {
+		page.postHandle[r.FormValue("postProcessingHandler")](w, r)
+		w.Write([]byte("thank you"))
+	} else {
+		err := page.tmpl.Execute(w, page)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}
 }
 
 func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
-	filename := title + ".txt"
-	data, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	body := make(map[string]string)
-	r := bufio.NewReader(data)
-	s, _, e := r.ReadLine()
-	for e == nil {
-		field := strings.Split(string(s), ">>")
-		body[field[0]] = field[1]
-		s, _, e = r.ReadLine()
+	var body map[string]string
+	if title != "" {
+		filename := title + ".txt"
+		data, err := os.Open(filename)
+		if err != nil {
+			return nil, err
+		}
+		body = make(map[string]string)
+		r := bufio.NewReader(data)
+		s, _, e := r.ReadLine()
+		for e == nil {
+			field := strings.Split(string(s), ">>")
+			body[field[0]] = field[1]
+			s, _, e = r.ReadLine()
+		}
 	}
 
-	page := &Page{title, body, site, false, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, false, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
-			"table": page.table,
-			"item":  page.item,
-			"page":  page.page,
-			"menu":  page.menu}).
+			"table":   page.table,
+			"item":    page.item,
+			"service": page.service,
+			"page":    page.page,
+			"menu":    page.menu}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -99,13 +111,20 @@ func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable 
 
 func (page *Page) AddPage(name string, data *Page) {
 	if page.pages == nil {
-		page.pages = make(map[string]*Page)
+		page.pages = &PageIndex{nil}
 	}
-	page.pages[name] = data
+	page.pages.AddPage(name, data)
 }
 
-func (page *Page) SetRequireLogin() {
-	page.requireLogin = true
+func (page *Page) AddPostHandler(name string, handle postFunc) {
+	if page.postHandle == nil {
+		page.postHandle = make(map[string]postFunc)
+	}
+	page.postHandle[name] = handle
+}
+
+func (page *Page) SetSecure() {
+	page.secure = true
 }
 
 func (page *Page) table(name string) template.HTML {
@@ -116,10 +135,14 @@ func (page *Page) table(name string) template.HTML {
 }
 
 func (page *Page) page(name string) template.HTML {
-	if page.pages[name] == nil {
-		return template.HTML("<h1>Empty page</h1>")
+	if page.pages == nil || page.pages.Pi == nil || page.pages.Pi[name] == nil {
+		if page.Site.Pages == nil || page.Site.Pages.Pi == nil || page.Site.Pages.Pi[name] == nil {
+			return template.HTML("<h1>Empty page</h1>")
+		} else {
+			return template.HTML(page.Site.Pages.Pi[name].Render())
+		}
 	}
-	return template.HTML(page.pages[name].Render())
+	return template.HTML(page.pages.Pi[name].Render())
 }
 
 func (page *Page) menu(name string) template.HTML {
@@ -137,6 +160,10 @@ func (page *Page) item(name string) template.CSS {
 	t := template.Must(template.New("").Parse(page.Body[name]))
 	t.Execute(buf, nil)
 	return template.CSS(buf.String())
+}
+
+func (page *Page) service(name, user, command, data string) template.HTML {
+	return template.HTML("")
 }
 
 func (page *Page) Render() template.HTML {

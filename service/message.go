@@ -13,6 +13,6 @@ func (ecs *MessageService) Status() string {
 	return "good"
 }
 
-func (ecs *MessageService) Execute(command, data string) string {
+func (ecs *MessageService) Execute(user, command, data string) string {
 	return "message service executed commmand " + command + " with data " + data
 }

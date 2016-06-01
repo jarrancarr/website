@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/jarrancarr/website/html"
+	"github.com/jarrancarr/website/service"
 )
 
 var ResourceDir = "../../"
@@ -20,6 +21,7 @@ type Site struct {
 	Tables        *html.TableIndex
 	Menus         *html.MenuIndex
 	Pages         *PageIndex
+	Service       map[string]service.Service
 }
 
 type Account struct {
@@ -32,7 +34,7 @@ type Session struct {
 }
 
 func CreateSite(name string) *Site {
-	site := Site{name, make(map[string]*Session), "", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil}
+	site := Site{name, make(map[string]*Session), name + "-Cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, nil}
 	return &site
 }
 
@@ -58,6 +60,13 @@ func (site *Site) AddPage(name string, data *Page) *Page {
 	}
 	site.Pages.AddPage(name, data)
 	return site.Pages.Pi[name]
+}
+
+func (site *Site) AddService(name string, serve service.Service) {
+	if site.Service == nil {
+		site.Service = make(map[string]service.Service)
+	}
+	site.Service[name] = serve
 }
 
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
