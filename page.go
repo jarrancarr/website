@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/jarrancarr/website/html"
-	"github.com/jarrancarr/website/service"
 )
 
 type postFunc func(w http.ResponseWriter, r *http.Request)
@@ -22,7 +21,6 @@ type Page struct {
 	Body          map[string]string
 	Site          *Site
 	postHandle    map[string]postFunc
-	secure        bool
 	menus         *html.MenuIndex
 	tables        *html.TableIndex
 	tmpl          *template.Template
@@ -43,16 +41,9 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if page.secure {
-		sessionCookie, err := r.Cookie(page.Site.SessionCookie)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if sessionCookie == nil {
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
-		}
+
+	for _, pFunc := range page.initProcessor {
+		pFunc(w, r)
 	}
 
 	if r.Method == "POST" {
@@ -84,7 +75,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, false, nil, nil, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -131,9 +122,12 @@ func (page *Page) AddPostHandler(name string, handle postFunc) *Page {
 	return page
 }
 
-func (page *Page) SetSecure() {
-	page.initProcessor = append(page.initProcessor, service.Session)
-	page.secure = true
+func (page *Page) AddInitProcessor(initFunc postFunc) {
+	page.initProcessor = append(page.initProcessor, initFunc)
+}
+
+func (page *Page) AddPreProcessor(initFunc postFunc) {
+	page.initProcessor = append(page.preProcessor, initFunc)
 }
 
 func (page *Page) table(name string) template.HTML {

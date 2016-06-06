@@ -1,9 +1,9 @@
 package service
 
-type AccountService struct {
-	Session       map[string]*Session
-	SessionCookie string
-}
+import (
+	"net/http"
+	"time"
+)
 
 type Account struct {
 	name string
@@ -14,8 +14,14 @@ type Session struct {
 	item map[string]interface{}
 }
 
-func CreateAccountService() Service {
-	as := AccountService{make(map[string]*Session), generateSessionKey()}
+type AccountService struct {
+	SiteSessionCookieName string
+	Domain                string
+	session               map[string]*Session
+}
+
+func CreateAccountService() *AccountService {
+	as := AccountService{generateSessionKey(), "", make(map[string]*Session)}
 	return &as
 }
 
@@ -23,34 +29,52 @@ func (ecs *AccountService) Status() string {
 	return "good"
 }
 
-func (acs *AccountService) Execute(command, user, data string) string {
+func (acs *AccountService) Execute(command, user, sessionKey string) string {
 	switch command {
 	case "Login":
-		acs.CreateSession(&Account{user})
+		if acs.session == nil {
+			acs.session = make(map[string]*Session)
+		}
+		acs.session[sessionKey].user = &Account{user}
 		return "user created"
 	case "Logout":
-		acs.RemoveSession(user, data)
+		acs.RemoveSession(sessionKey)
 		return "user logged off"
 	}
 	return ""
 }
 
 func (acs *AccountService) GetSession(key string) *Session {
-	return acs.Session[key]
+	return acs.session[key]
 }
 
-func (acs *AccountService) CreateSession(user *Account) string {
+func (acs *AccountService) CreateSession() string {
 	key := generateSessionKey()
-	acs.Session[key] = &Session{user, make(map[string]interface{})}
+	acs.session[key] = &Session{nil, make(map[string]interface{})}
 	return key
 }
 
-func (acs *AccountService) RemoveSession(user *Account) string {
+func (acs *AccountService) RemoveSession(key string) {
+	acs.session[key] = nil
+}
 
 func generateSessionKey() string {
 	return "test"
 }
 
-func Session(w http.ResponseWriter, r *http.Request) {
-	
+func (acs *AccountService) Action(w http.ResponseWriter, r *http.Request) string {
+	return ""
+}
+
+func (acs *AccountService) ValidateSession(w http.ResponseWriter, r *http.Request) {
+	sessionCookie, err := r.Cookie(acs.SiteSessionCookieName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	if sessionCookie == nil {
+		key := acs.CreateSession()
+		expire := time.Now().Add(time.Minute * 20)
+		cookie := http.Cookie{Name: acs.SiteSessionCookieName, Value: key, Path: "/", Domain: acs.Domain, Expires: expire}
+		http.SetCookie(w, &cookie)
+	}
 }
