@@ -15,26 +15,16 @@ import (
 var ResourceDir = "../../"
 
 type Site struct {
-	Name          string
-	Session       map[string]*Session
-	SessionCookie string
-	Tables        *html.TableIndex
-	Menus         *html.MenuIndex
-	Pages         *PageIndex
-	Service       map[string]service.Service
-}
-
-type Account struct {
-	name string
-}
-
-type Session struct {
-	user *Account
-	item map[string]interface{}
+	Name         string
+	Tables       *html.TableIndex
+	Menus        *html.MenuIndex
+	Pages        *PageIndex
+	Service      map[string]service.Service
+	preProcessor []postFunc
 }
 
 func CreateSite(name string) *Site {
-	site := Site{name, make(map[string]*Session), name + "-Cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, nil}
+	site := Site{name, &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, nil, nil}
 	return &site
 }
 
@@ -85,20 +75,6 @@ func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	defer f.Close()
 	io.Copy(f, file)
 	site.ServeHTTP(w, r)
-}
-
-func (site *Site) GetSession(key string) *Session {
-	return site.Session[key]
-}
-
-func (site *Site) CreateSession(user *Account) string {
-	key := generateSessionKey()
-	site.Session[key] = &Session{user, make(map[string]interface{})}
-	return key
-}
-
-func generateSessionKey() string {
-	return "test"
 }
 
 func ServeResource(w http.ResponseWriter, r *http.Request) {

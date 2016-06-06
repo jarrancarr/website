@@ -10,20 +10,25 @@ import (
 	"strings"
 
 	"github.com/jarrancarr/website/html"
+	"github.com/jarrancarr/website/service"
 )
 
 type postFunc func(w http.ResponseWriter, r *http.Request)
 
+type filterFunc func(w http.ResponseWriter, r *http.Request)
+
 type Page struct {
-	Title      string
-	Body       map[string]string
-	Site       *Site
-	postHandle map[string]postFunc
-	secure     bool
-	menus      *html.MenuIndex
-	tables     *html.TableIndex
-	tmpl       *template.Template
-	pages      *PageIndex
+	Title         string
+	Body          map[string]string
+	Site          *Site
+	postHandle    map[string]postFunc
+	secure        bool
+	menus         *html.MenuIndex
+	tables        *html.TableIndex
+	tmpl          *template.Template
+	pages         *PageIndex
+	initProcessor []postFunc // initial processors before site processors
+	preProcessor  []postFunc // processors after site processors
 }
 
 type PageIndex struct {
@@ -49,6 +54,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
 	if r.Method == "POST" {
 		page.postHandle[r.FormValue("postProcessingHandler")](w, r)
 		w.Write([]byte("thank you"))
@@ -78,7 +84,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, false, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, false, nil, nil, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -109,21 +115,24 @@ func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable 
 	return page.tables.Ti[name]
 }
 
-func (page *Page) AddPage(name string, data *Page) {
+func (page *Page) AddPage(name string, data *Page) *Page {
 	if page.pages == nil {
 		page.pages = &PageIndex{nil}
 	}
 	page.pages.AddPage(name, data)
+	return page
 }
 
-func (page *Page) AddPostHandler(name string, handle postFunc) {
+func (page *Page) AddPostHandler(name string, handle postFunc) *Page {
 	if page.postHandle == nil {
 		page.postHandle = make(map[string]postFunc)
 	}
 	page.postHandle[name] = handle
+	return page
 }
 
 func (page *Page) SetSecure() {
+	page.initProcessor = append(page.initProcessor, service.Session)
 	page.secure = true
 }
 
