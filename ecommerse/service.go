@@ -1,7 +1,7 @@
 package ecommerse
 
 import (
-	"github.com/jarrancarr/website/service"
+	"github.com/jarrancarr/website"
 )
 
 type ECommerseService struct {
@@ -9,7 +9,7 @@ type ECommerseService struct {
 	catalog map[string]*Product
 }
 
-func CreateService() service.Service {
+func CreateService() website.Service {
 	ecs := ECommerseService{nil, nil}
 	return &ecs
 }
@@ -18,10 +18,10 @@ func (ecs *ECommerseService) Status() string {
 	return "good"
 }
 
-func (ecs *ECommerseService) Execute(account, command, data string) string {
+func (ecs *ECommerseService) Execute(account, command string, data []string) string {
 	switch command {
 	case "get":
-		return ecs.catalog[data].Name
+		return ecs.catalog[data[0]].Name
 	}
 	return ""
 }

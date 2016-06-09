@@ -12,9 +12,9 @@ import (
 	"github.com/jarrancarr/website/html"
 )
 
-type postFunc func(w http.ResponseWriter, r *http.Request)
+type postFunc func(w http.ResponseWriter, r *http.Request, s *Session) string
 
-type filterFunc func(w http.ResponseWriter, r *http.Request)
+type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) string
 
 type Page struct {
 	Title         string
@@ -27,6 +27,7 @@ type Page struct {
 	pages         *PageIndex
 	initProcessor []postFunc // initial processors before site processors
 	preProcessor  []postFunc // processors after site processors
+	postProcessor []postFunc // processors after page
 }
 
 type PageIndex struct {
@@ -41,19 +42,32 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
+	var s *Session
+	var status string
 	for _, pFunc := range page.initProcessor {
-		pFunc(w, r)
+		status = pFunc(w, r, s)
+	}
+	for _, pFunc := range page.Site.SiteProcessor {
+		status = pFunc(w, r, s)
+	}
+	for _, pFunc := range page.preProcessor {
+		status = pFunc(w, r, s)
 	}
 
 	if r.Method == "POST" {
-		page.postHandle[r.FormValue("postProcessingHandler")](w, r)
+		status = page.postHandle[r.FormValue("postProcessingHandler")](w, r, s)
 		w.Write([]byte("thank you"))
+		if status == "done" {
+			return
+		}
 	} else {
 		err := page.tmpl.Execute(w, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
+	}
+	for _, pFunc := range page.postProcessor {
+		pFunc(w, r, s)
 	}
 }
 
@@ -75,7 +89,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -127,7 +141,11 @@ func (page *Page) AddInitProcessor(initFunc postFunc) {
 }
 
 func (page *Page) AddPreProcessor(initFunc postFunc) {
-	page.initProcessor = append(page.preProcessor, initFunc)
+	page.preProcessor = append(page.preProcessor, initFunc)
+}
+
+func (page *Page) AddPostProcessor(initFunc postFunc) {
+	page.postProcessor = append(page.postProcessor, initFunc)
 }
 
 func (page *Page) table(name string) template.HTML {
@@ -165,8 +183,8 @@ func (page *Page) item(name string) template.CSS {
 	return template.CSS(buf.String())
 }
 
-func (page *Page) service(name, user, command, data string) template.HTML {
-	return template.HTML("")
+func (page *Page) service(serviceName, command, user, data string) template.HTML {
+	return template.HTML(page.Site.Service[serviceName].Execute(command, user, []string{data}))
 }
 
 func (page *Page) Render() template.HTML {

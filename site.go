@@ -9,18 +9,17 @@ import (
 	"strings"
 
 	"github.com/jarrancarr/website/html"
-	"github.com/jarrancarr/website/service"
 )
 
 var ResourceDir = "../../"
 
 type Site struct {
-	Name         string
-	Tables       *html.TableIndex
-	Menus        *html.MenuIndex
-	Pages        *PageIndex
-	Service      map[string]service.Service
-	preProcessor []postFunc
+	Name          string
+	Tables        *html.TableIndex
+	Menus         *html.MenuIndex
+	Pages         *PageIndex
+	Service       map[string]Service
+	SiteProcessor []postFunc
 }
 
 func CreateSite(name string) *Site {
@@ -52,9 +51,9 @@ func (site *Site) AddPage(name string, data *Page) *Page {
 	return site.Pages.Pi[name]
 }
 
-func (site *Site) AddService(name string, serve service.Service) {
+func (site *Site) AddService(name string, serve Service) {
 	if site.Service == nil {
-		site.Service = make(map[string]service.Service)
+		site.Service = make(map[string]Service)
 	}
 	site.Service[name] = serve
 }
