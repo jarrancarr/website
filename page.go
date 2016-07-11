@@ -12,22 +12,24 @@ import (
 	"github.com/jarrancarr/website/html"
 )
 
-type postFunc func(w http.ResponseWriter, r *http.Request, s *Session) string
+type postFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
 
-type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) string
+type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
 
 type Page struct {
-	Title         string
-	Body          map[string]string
-	Site          *Site
-	postHandle    map[string]postFunc
-	menus         *html.MenuIndex
-	tables        *html.TableIndex
-	tmpl          *template.Template
-	pages         *PageIndex
-	initProcessor []postFunc // initial processors before site processors
-	preProcessor  []postFunc // processors after site processors
-	postProcessor []postFunc // processors after page
+	Title              string
+	Body               map[string]string
+	Site               *Site
+	postHandle         map[string]postFunc
+	menus              *html.MenuIndex
+	tables             *html.TableIndex
+	tmpl               *template.Template
+	pages              *PageIndex
+	initProcessor      []postFunc // initial processors before site processors
+	preProcessor       []postFunc // processors after site processors
+	postProcessor      []postFunc // processors after page
+	blockSiteProcessor map[string]bool
+	activeSession      *Session
 }
 
 type PageIndex struct {
@@ -42,22 +44,28 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var s *Session
+	page.activeSession = page.Site.GetCurrentSession(w, r)
+	if page.activeSession == nil {
+		return
+	}
 	var status string
 	for _, pFunc := range page.initProcessor {
-		status = pFunc(w, r, s)
+		status, _ = pFunc(w, r, page.activeSession)
 	}
-	for _, pFunc := range page.Site.SiteProcessor {
-		status = pFunc(w, r, s)
+	for key, pFunc := range page.Site.SiteProcessor {
+		if page.blockSiteProcessor != nil && !page.blockSiteProcessor[key] {
+			status, _ = pFunc(w, r, page.activeSession)
+		}
 	}
 	for _, pFunc := range page.preProcessor {
-		status = pFunc(w, r, s)
+		status, _ = pFunc(w, r, page.activeSession)
 	}
 
 	if r.Method == "POST" {
-		status = page.postHandle[r.FormValue("postProcessingHandler")](w, r, s)
-		w.Write([]byte("thank you"))
-		if status == "done" {
+		status, _ = page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.activeSession)
+		w.Write([]byte("<br><br>thank you, status= " + status)) // + s.User.Name
+
+		if status == "ok" {
 			return
 		}
 	} else {
@@ -67,7 +75,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, pFunc := range page.postProcessor {
-		pFunc(w, r, s)
+		status, _ = pFunc(w, r, page.activeSession)
 	}
 }
 
@@ -89,7 +97,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -183,8 +191,8 @@ func (page *Page) item(name string) template.CSS {
 	return template.CSS(buf.String())
 }
 
-func (page *Page) service(serviceName, command, user, data string) template.HTML {
-	return template.HTML(page.Site.Service[serviceName].Execute(command, user, []string{data}))
+func (page *Page) service(data ...string) template.HTML {
+	return template.HTML(page.Site.Service[data[0]].Execute(page.activeSession, data))
 }
 
 func (page *Page) Render() template.HTML {

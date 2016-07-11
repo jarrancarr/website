@@ -17,6 +17,6 @@ func (ecs *MessageService) Status() string {
 	return "good"
 }
 
-func (ecs *MessageService) Execute(command, user string, data []string) string {
-	return "message service executed commmand " + command + " with data " + data[0]
+func (ecs *MessageService) Execute(service *website.Session, data []string) string {
+	return "message service executed commmand " + data[0] + " with data " + data[1]
 }

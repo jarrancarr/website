@@ -18,10 +18,10 @@ func (ecs *ECommerseService) Status() string {
 	return "good"
 }
 
-func (ecs *ECommerseService) Execute(account, command string, data []string) string {
-	switch command {
+func (ecs *ECommerseService) Execute(session *website.Session, data []string) string {
+	switch data[0] {
 	case "get":
-		return ecs.catalog[data[0]].Name
+		return ecs.catalog[data[1]].Name
 	}
 	return ""
 }

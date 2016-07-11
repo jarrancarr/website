@@ -1,12 +1,15 @@
 package website
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -14,16 +17,27 @@ import (
 var ResourceDir = "../../"
 
 type Site struct {
-	Name          string
-	Tables        *html.TableIndex
-	Menus         *html.MenuIndex
-	Pages         *PageIndex
-	Service       map[string]Service
-	SiteProcessor []postFunc
+	Name                  string
+	SiteSessionCookieName string
+	Tables                *html.TableIndex
+	Menus                 *html.MenuIndex
+	Pages                 *PageIndex
+	UserSession           map[string]*Session
+	Service               map[string]Service
+	SiteProcessor         map[string]postFunc
+}
+
+type Session struct {
+	Item map[string]interface{}
+	Data map[string]string
+}
+
+func createSession() *Session {
+	return &Session{make(map[string]interface{}), make(map[string]string)}
 }
 
 func CreateSite(name string) *Site {
-	site := Site{name, &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, nil, nil}
+	site := Site{name, name + "-cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil}
 	return &site
 }
 
@@ -35,6 +49,37 @@ func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Session {
+	sessionCookie, _ := r.Cookie(site.SiteSessionCookieName)
+	//	cookies := r.Cookies()
+	//	fmt.Printf("found %v cookies\n", len(cookies))
+	//	for _, c := range cookies {
+	//		fmt.Println(c.Name + " = " + c.Value)
+	//	}
+	if sessionCookie != nil && site.UserSession[sessionCookie.Value] != nil {
+		fmt.Println("sessionCookie: " + sessionCookie.Name + " = " + sessionCookie.Value)
+		return site.UserSession[sessionCookie.Value]
+	} else {
+		sessionKey := make([]byte, 64)
+		rand.Read(sessionKey)
+		fmt.Println("creating cookie: " + base64.URLEncoding.EncodeToString(sessionKey))
+		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, base64.URLEncoding.EncodeToString(sessionKey), "/",
+			"localhost", time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
+		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)] = createSession()
+		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["name"] = "Anonamous"
+
+		return site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)]
+	}
+	return nil
+}
+
+func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
+	if site.SiteProcessor == nil {
+		site.SiteProcessor = make(map[string]postFunc)
+	}
+	site.SiteProcessor[name] = initFunc
+}
+
 func (site *Site) AddMenu(name string) *html.HTMLMenu {
 	if site.Menus == nil {
 		site.Menus = &html.MenuIndex{nil}
@@ -43,19 +88,25 @@ func (site *Site) AddMenu(name string) *html.HTMLMenu {
 	return site.Menus.Mi[name]
 }
 
-func (site *Site) AddPage(name string, data *Page) *Page {
+func (site *Site) AddPage(name, template, url string) *Page {
+	page, err := LoadPage(site, name, template, url)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	if site.Pages == nil {
 		site.Pages = &PageIndex{nil}
 	}
-	site.Pages.AddPage(name, data)
-	return site.Pages.Pi[name]
+	site.Pages.AddPage(name, page)
+	return page
 }
 
-func (site *Site) AddService(name string, serve Service) {
+func (site *Site) AddService(name string, serve Service) Service {
 	if site.Service == nil {
 		site.Service = make(map[string]Service)
 	}
 	site.Service[name] = serve
+	return serve
 }
 
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
