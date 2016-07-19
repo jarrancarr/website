@@ -17,7 +17,7 @@ import (
 var ResourceDir = "../../"
 
 type Site struct {
-	Name                  string
+	Name, Url	          string
 	SiteSessionCookieName string
 	Tables                *html.TableIndex
 	Menus                 *html.MenuIndex
@@ -36,8 +36,8 @@ func createSession() *Session {
 	return &Session{make(map[string]interface{}), make(map[string]string)}
 }
 
-func CreateSite(name string) *Site {
-	site := Site{name, name + "-cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil}
+func CreateSite(name, url string) *Site {
+	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil}
 	return &site
 }
 
@@ -57,16 +57,14 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 	//		fmt.Println(c.Name + " = " + c.Value)
 	//	}
 	if sessionCookie != nil && site.UserSession[sessionCookie.Value] != nil {
-		fmt.Println("sessionCookie: " + sessionCookie.Name + " = " + sessionCookie.Value)
 		return site.UserSession[sessionCookie.Value]
 	} else {
-		sessionKey := make([]byte, 64)
+		sessionKey := make([]byte, 16)
 		rand.Read(sessionKey)
-		fmt.Println("creating cookie: " + base64.URLEncoding.EncodeToString(sessionKey))
 		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, base64.URLEncoding.EncodeToString(sessionKey), "/",
 			"localhost", time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
 		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)] = createSession()
-		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["name"] = "Anonamous"
+		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["name"] = "Anonymous"
 
 		return site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)]
 	}
@@ -97,7 +95,11 @@ func (site *Site) AddPage(name, template, url string) *Page {
 	if site.Pages == nil {
 		site.Pages = &PageIndex{nil}
 	}
-	site.Pages.AddPage(name, page)
+	if name == "" {
+		site.Pages.AddPage(template, page)
+	} else {
+		site.Pages.AddPage(name, page)
+	}
 	return page
 }
 

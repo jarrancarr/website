@@ -28,13 +28,14 @@ type Page struct {
 	initProcessor      []postFunc // initial processors before site processors
 	preProcessor       []postFunc // processors after site processors
 	postProcessor      []postFunc // processors after page
-	blockSiteProcessor map[string]bool
-	activeSession      *Session
+	bypassSiteProcessor map[string]bool
 }
 
 type PageIndex struct {
 	Pi map[string]*Page
 }
+
+var activeSession *Session
 
 func (pi *PageIndex) AddPage(name string, data *Page) {
 	if pi.Pi == nil {
@@ -44,38 +45,47 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	page.activeSession = page.Site.GetCurrentSession(w, r)
-	if page.activeSession == nil {
-		return
-	}
-	var status string
 	for _, pFunc := range page.initProcessor {
-		status, _ = pFunc(w, r, page.activeSession)
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		if status != "ok" {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 	for key, pFunc := range page.Site.SiteProcessor {
-		if page.blockSiteProcessor != nil && !page.blockSiteProcessor[key] {
-			status, _ = pFunc(w, r, page.activeSession)
+		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
+			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+			if status != "ok" {
+				//http.Error(w, err.Error(), http.StatusForbidden)
+				http.Redirect(w, r, "login", 301)
+				return
+			}
 		}
 	}
 	for _, pFunc := range page.preProcessor {
-		status, _ = pFunc(w, r, page.activeSession)
-	}
-
-	if r.Method == "POST" {
-		status, _ = page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.activeSession)
-		w.Write([]byte("<br><br>thank you, status= " + status)) // + s.User.Name
-
-		if status == "ok" {
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		if status != "ok" {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+	}
+	if r.Method == "POST" {
+		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
+		http.Redirect(w, r, redirect, 301)
+		return
 	} else {
+		activeSession = page.Site.GetCurrentSession(w, r)
 		err := page.tmpl.Execute(w, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 	for _, pFunc := range page.postProcessor {
-		status, _ = pFunc(w, r, page.activeSession)
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		if status != "ok" {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -97,7 +107,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil}
+	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil, nil}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -156,6 +166,13 @@ func (page *Page) AddPostProcessor(initFunc postFunc) {
 	page.postProcessor = append(page.postProcessor, initFunc)
 }
 
+func (page *Page) AddBypassSiteProcessor(name string) {
+	if 	page.bypassSiteProcessor ==nil {
+		page.bypassSiteProcessor = make(map[string]bool)
+	}
+	page.bypassSiteProcessor[name] = true
+}
+
 func (page *Page) table(name string) template.HTML {
 	if page.tables.Ti[name] == nil {
 		return template.HTML(page.Site.Tables.Ti[name].Render())
@@ -192,7 +209,7 @@ func (page *Page) item(name string) template.CSS {
 }
 
 func (page *Page) service(data ...string) template.HTML {
-	return template.HTML(page.Site.Service[data[0]].Execute(page.activeSession, data))
+	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data))
 }
 
 func (page *Page) Render() template.HTML {
