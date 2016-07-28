@@ -3,7 +3,7 @@ package website
 import (
 	"bufio"
 	"bytes"
-	//"fmt"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -21,6 +21,7 @@ type Page struct {
 	Body               map[string]string
 	Site               *Site
 	postHandle         map[string]postFunc
+	ajaxHandle         map[string]postFunc
 	menus              *html.MenuIndex
 	tables             *html.TableIndex
 	tmpl               *template.Template
@@ -45,6 +46,7 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("processing page: "+page.Title)
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 		if status != "ok" {
@@ -56,6 +58,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
 			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 			if status != "ok" {
+				fmt.Println("status = "+ status)
 				//http.Error(w, err.Error(), http.StatusForbidden)
 				http.Redirect(w, r, "login", 301)
 				return
@@ -72,6 +75,9 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
 		http.Redirect(w, r, redirect, 301)
+		return
+	} else if r.Method == "AJAX" {
+		page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
 		return
 	} else {
 		activeSession = page.Site.GetCurrentSession(w, r)
@@ -107,7 +113,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{title, body, site, nil, nil, nil, nil, nil, nil, nil, nil, nil}
+	page := &Page{Title:title, Body:body, Site:site}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -151,6 +157,14 @@ func (page *Page) AddPostHandler(name string, handle postFunc) *Page {
 		page.postHandle = make(map[string]postFunc)
 	}
 	page.postHandle[name] = handle
+	return page
+}
+
+func (page *Page) AddAJAXHandler(name string, handle postFunc) *Page {
+	if page.ajaxHandle == nil {
+		page.ajaxHandle = make(map[string]postFunc)
+	}
+	page.ajaxHandle[name] = handle
 	return page
 }
 
