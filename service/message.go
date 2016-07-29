@@ -4,7 +4,7 @@ import (
 	"time"
 	"github.com/jarrancarr/website"
 	"net/http"
-	"fmt"
+	//"fmt"
 )
 
 type Message struct {
@@ -72,7 +72,6 @@ func (pmq PersonalMessageQueue) listen(ear <-chan *Message) {
 }
 
 func (mss *MessageService) TestAJAX(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
-	fmt.Println("got to TestAJAX call!")
 	w.Write([]byte(`{ "one": "Singular sensation", "two": "Beady little eyes", "three": "Little birds pitch by my doorstep"}`))
 	return "ok", nil
 }

@@ -3,7 +3,7 @@ package website
 import (
 	"bufio"
 	"bytes"
-	"fmt"
+	//"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -46,7 +46,7 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("processing page: "+page.Title)
+	//fmt.Println("processing page: "+page.Title)
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 		if status != "ok" {
@@ -58,9 +58,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
 			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 			if status != "ok" {
-				fmt.Println("status = "+ status)
-				//http.Error(w, err.Error(), http.StatusForbidden)
-				http.Redirect(w, r, "login", 301)
+				http.Redirect(w, r, "login", 302)
 				return
 			}
 		}
@@ -74,10 +72,16 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == "POST" {
 		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
-		http.Redirect(w, r, redirect, 301)
+		http.Redirect(w, r, redirect, 302)
 		return
 	} else if r.Method == "AJAX" {
-		page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
+		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		if status != "ok" {
+			http.Redirect(w, r, status, 307)
+		}
 		return
 	} else {
 		activeSession = page.Site.GetCurrentSession(w, r)
@@ -120,7 +124,9 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"item":    page.item,
 			"service": page.service,
 			"page":    page.page,
-			"menu":    page.menu}).
+			"menu":    page.menu,
+			"ajax":    page.ajax,
+			"target":  page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -224,6 +230,37 @@ func (page *Page) item(name string) template.CSS {
 
 func (page *Page) service(data ...string) template.HTML {
 	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data))
+}
+
+func (page *Page) ajax(data ...string) template.HTML {
+	return template.HTML(`<script>
+		$(function() {
+			$('input').on('click', function() {
+				$.ajax({
+					url: '/`+data[0]+`',
+					type: 'AJAX',
+					headers: { 'ajaxProcessingHandler':'`+data[1]+`' },
+					dataType: 'html',
+					data: { 'greet':'hello there, partner!' },
+					success: function(data, textStatus, jqXHR) {
+						var ul = $( "<ul/>", {"class": "my-new-list"}).appendTo( "#`+data[2]+`" );
+						var obj = JSON.parse(data);
+						ul.append( $(document.createElement('li')).text( obj.one ) );
+						ul.append( $(document.createElement('li')).text( obj.two ) );
+						ul.append( $(document.createElement('li')).text( obj.three ) );
+						
+					},
+					error: function(data, textStatus, jqXHR) {
+						console.log("button fail!");
+					}
+				});
+			});
+		});
+	</script>`)
+}
+
+func (page *Page) target(name string) template.HTML {
+	return template.HTML("<div id='"+name+"'/>")
 }
 
 func (page *Page) Render() template.HTML {

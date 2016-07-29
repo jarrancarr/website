@@ -34,7 +34,12 @@ func (menu *HTMLMenu) Add(class, id, style string) *HTMLMenu {
 	}
 	return menu
 }
-func (menu *HTMLMenu) AddItem(item *HTMLMenuItem) *HTMLMenu {
+
+func (menu *HTMLMenu) AddItem(name, url string) *HTMLMenu {
+	return menu.AddSpecializedItem(&HTMLMenuItem{name, url, HTMLElement{}})
+}
+
+func (menu *HTMLMenu) AddSpecializedItem(item *HTMLMenuItem) *HTMLMenu {
 	if menu.items == nil {
 		menu.items = make([]HTMLMenuItem, 0)
 	}
@@ -52,5 +57,5 @@ func (menu *HTMLMenu) Render() string {
 }
 
 func (mi *HTMLMenuItem) Render() string {
-	return "<li role='presentation' class='active'><a href='" + mi.Name + "'>" + mi.Url + "</a></li>"
+	return "<li role='presentation' class='active'><a href='" + mi.Url + "'>" + mi.Name + "</a></li>"
 }
