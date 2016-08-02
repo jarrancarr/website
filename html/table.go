@@ -2,22 +2,23 @@ package html
 
 import (
 	"errors"
+	"fmt"
 )
 
 type HTMLTable struct {
 	header []HTMLCell
 	row    []HTMLRow
-	cis    HTMLElement
+	cis    *HTMLElement
 }
 
 type HTMLRow struct {
 	cell []HTMLCell
-	cis  HTMLElement
+	cis  *HTMLElement
 }
 
 type HTMLCell struct {
 	data string
-	cis  HTMLElement
+	cis  *HTMLElement
 }
 
 type TableIndex struct {
@@ -25,15 +26,14 @@ type TableIndex struct {
 }
 
 func MakeTable(headers []string, class, id, style string) *HTMLTable {
-	table := HTMLTable{nil, nil, HTMLElement{class, id, style}}
+	table := HTMLTable{nil, nil, &HTMLElement{class, id, style}}
 	table.header = make([]HTMLCell, len(headers))
 	for idx, head := range headers {
-		table.header[idx] = HTMLCell{head, HTMLElement{"", "", ""}}
+		table.header[idx] = HTMLCell{head, &HTMLElement{"", "", ""}}
 	}
 	table.row = make([]HTMLRow, 0, 10)
 	return &table
 }
-
 func (ti *TableIndex) AddTable(name string, headers, data []string) {
 	if ti.Ti == nil {
 		ti.Ti = make(map[string]*HTMLTable)
@@ -43,19 +43,29 @@ func (ti *TableIndex) AddTable(name string, headers, data []string) {
 		ti.Ti[name].AddRow(data[elem : elem+len(headers)])
 	}
 }
-
+func (ti *TableIndex) GetNames() []string {
+	var names []string
+	names = make([]string,0)
+	fmt.Printf("getting names of %d items\n",len(ti.Ti))
+	if ti.Ti != nil { 
+		for n, _ := range(ti.Ti) {
+			fmt.Println("adding name "+n)
+			names = append(names, n)
+		}
+	}
+	return names
+}
 func (table *HTMLTable) AddRow(data []string) error {
 	if len(data) != len(table.header) {
 		return errors.New("incorrect number of data elements")
 	}
-	table.row = append(table.row, HTMLRow{nil, HTMLElement{"", "", ""}})
+	table.row = append(table.row, HTMLRow{nil, &HTMLElement{"", "", ""}})
 	table.row[len(table.row)-1].cell = make([]HTMLCell, 0)
 	for _, td := range data {
-		table.row[len(table.row)-1].cell = append(table.row[len(table.row)-1].cell, HTMLCell{td, HTMLElement{"", "", ""}})
+		table.row[len(table.row)-1].cell = append(table.row[len(table.row)-1].cell, HTMLCell{td, &HTMLElement{"", "", ""}})
 	}
 	return nil
 }
-
 func (table *HTMLTable) AddClass(class string) *HTMLTable {
 	table.cis.AddClass(class)
 	return table
@@ -86,7 +96,6 @@ func (table *HTMLTable) AddRowStyle(idx int, style string) *HTMLTable {
 	}
 	return table
 }
-
 func (table *HTMLTable) AddCellClass(row, column int, class string) *HTMLTable {
 	if row < len(table.row) && column < len(table.header) {
 		table.row[row].cell[column].cis.AddClass(class)
@@ -105,14 +114,18 @@ func (table *HTMLTable) AddCellStyle(row, column int, style string) *HTMLTable {
 	}
 	return table
 }
-
 func (table *HTMLTable) Render() string {
-	element := table.cis.Render("table")
-	element += "<tr>"
+	var element string
+	if table.cis != nil {
+		element = table.cis.Render("table")
+	} else {
+		element = "<table>"
+	}
+	element += "<thead>"
 	for _, d := range table.header {
 		element += d.Render()
 	}
-	element += "</tr>"
+	element += "</thead>"
 	for _, d := range table.row {
 		element += d.Render()
 	}

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"strconv"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -19,6 +20,7 @@ type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string
 type Page struct {
 	Title              string
 	Body               map[string]string
+	Data               map[string][]template.HTML
 	Site               *Site
 	postHandle         map[string]postFunc
 	ajaxHandle         map[string]postFunc
@@ -58,7 +60,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
 			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 			if status != "ok" {
-				http.Redirect(w, r, "login", 302)
+				http.Redirect(w, r, status, 302)
 				return
 			}
 		}
@@ -117,7 +119,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{Title:title, Body:body, Site:site}
+	page := &Page{Title:title, Body:body, Site:site, Data:make(map[string][]template.HTML)}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -221,11 +223,16 @@ func (page *Page) menu(name string) template.HTML {
 	return template.HTML(page.menus.Mi[name].Render())
 }
 
-func (page *Page) item(name string) template.CSS {
-	buf := new(bytes.Buffer)
-	t := template.Must(template.New("").Parse(page.Body[name]))
-	t.Execute(buf, nil)
-	return template.CSS(buf.String())
+func (page *Page) item(name ...string) template.CSS {
+	if len(name) == 1 {
+		return template.CSS(page.Body[name[0]])
+	} 
+	item := strings.Split(page.Body[name[0]], " ")
+	index, err := strconv.ParseInt(name[1], 10, 32)
+	if err != nil {
+		return template.CSS(item[0])
+	}
+	return template.CSS(item[index])
 }
 
 func (page *Page) service(data ...string) template.HTML {
@@ -243,8 +250,9 @@ func (page *Page) ajax(data ...string) template.HTML {
 					dataType: 'html',
 					data: { 'greet':'hello there, partner!' },
 					success: function(data, textStatus, jqXHR) {
-						var ul = $( "<ul/>", {"class": "my-new-list"}).appendTo( "#`+data[2]+`" );
+						var ul = $( "<ul/>", {"class": "my-new-list"});
 						var obj = JSON.parse(data);
+						$("#`+data[2]+`").replaceWith(ul);
 						ul.append( $(document.createElement('li')).text( obj.one ) );
 						ul.append( $(document.createElement('li')).text( obj.two ) );
 						ul.append( $(document.createElement('li')).text( obj.three ) );
@@ -260,7 +268,7 @@ func (page *Page) ajax(data ...string) template.HTML {
 }
 
 func (page *Page) target(name string) template.HTML {
-	return template.HTML("<div id='"+name+"'/>")
+	return template.HTML("<div id='"+name+"'></div>")
 }
 
 func (page *Page) Render() template.HTML {

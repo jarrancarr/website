@@ -105,7 +105,7 @@ func (acs *AccountService) CheckSecure(w http.ResponseWriter, r *http.Request, s
 		if s != nil {
 			s.Data["status"] = "User credentials not recognized."
 		}
-		return "error", errors.New("Invalid credentials!")
+		return "login", errors.New("Invalid credentials!")
 	}
 	s.Data["status"] = "User access granted."
 	return "ok", nil

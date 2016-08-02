@@ -23,13 +23,22 @@ func Link(data, url string) HTMLLink {
 }
 
 func (elem *HTMLElement) AddClass(class string) {
-	elem.class += " " + class
+	if elem.class != "" {
+		elem.class += " "
+	}
+	elem.class += class
 }
 func (elem *HTMLElement) AddId(id string) {
-	elem.id += " " + id
+	if elem.id != "" {
+		elem.id += " "
+	}
+	elem.id += id
 }
 func (elem *HTMLElement) AddStyle(style string) {
-	elem.style += " " + style
+	if elem.style != "" {
+		elem.style += " "
+	}
+	elem.style += style
 }
 
 func (elem HTMLLink) Render() string {
