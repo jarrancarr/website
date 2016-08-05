@@ -21,6 +21,7 @@ type Page struct {
 	Title              string
 	Body               map[string]string
 	Data               map[string][]template.HTML
+	Script             map[string][]template.JS
 	Site               *Site
 	postHandle         map[string]postFunc
 	ajaxHandle         map[string]postFunc
@@ -119,7 +120,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{Title:title, Body:body, Site:site, Data:make(map[string][]template.HTML)}
+	page := &Page{Title:title, Body:body, Site:site, Data:make(map[string][]template.HTML), Script:make(map[string][]template.JS)}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
