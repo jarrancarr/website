@@ -7,12 +7,11 @@ type Category struct {
 }
 
 type Product struct {
-	Cat         *Category
 	Name        string
 	Description string
 	ImageName   string
-	Price       int32
-	InStock     int32
+	Price       int
+	InStock     int
 }
 
 type Order struct {

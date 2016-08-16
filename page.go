@@ -3,7 +3,6 @@ package website
 import (
 	"bufio"
 	"bytes"
-	//"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -14,11 +13,10 @@ import (
 )
 
 type postFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
-
 type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
 
 type Page struct {
-	Title              string
+	Title, Url         string
 	Body               map[string]string
 	Data               map[string][]template.HTML
 	Script             map[string][]template.JS
@@ -241,23 +239,34 @@ func (page *Page) service(data ...string) template.HTML {
 }
 
 func (page *Page) ajax(data ...string) template.HTML {
+	url := page.Url
+	handler := ""
+	trigger := ""
+	target := ""
+	jsData := "'greet':'hello there, partner!'"
+	for _, d := range(data) {
+		if strings.HasPrefix(d, "url:") { url = d[4:] }
+		if strings.HasPrefix(d, "handler:") { handler = d[8:] }
+		if strings.HasPrefix(d, "target:") { target = d[7:] }
+		if strings.HasPrefix(d, "trigger:") { trigger = d[8:] }
+		if strings.HasPrefix(d, "data:") { jsData = d[5:] }
+	}
 	return template.HTML(`<script>
 		$(function() {
-			$('input').on('click', function() {
+			$('#`+trigger+`-trigger').on('click', function() {
 				$.ajax({
-					url: '/`+data[0]+`',
+					url: '/`+url+`',
 					type: 'AJAX',
-					headers: { 'ajaxProcessingHandler':'`+data[1]+`' },
+					headers: { 'ajaxProcessingHandler':'`+handler+`' },
 					dataType: 'html',
-					data: { 'greet':'hello there, partner!' },
+					data: { `+jsData+` },
 					success: function(data, textStatus, jqXHR) {
 						var ul = $( "<ul/>", {"class": "my-new-list"});
 						var obj = JSON.parse(data);
-						$("#`+data[2]+`").replaceWith(ul);
-						ul.append( $(document.createElement('li')).text( obj.one ) );
-						ul.append( $(document.createElement('li')).text( obj.two ) );
-						ul.append( $(document.createElement('li')).text( obj.three ) );
-						
+						$("#`+target+`").replaceWith(ul);
+						$.each(obj, function(i,val) {
+							ul.append( $(document.createElement('li')).text( i + "---" + val ) );
+						});						
 					},
 					error: function(data, textStatus, jqXHR) {
 						console.log("button fail!");
