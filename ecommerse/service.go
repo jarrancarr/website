@@ -3,6 +3,9 @@ package ecommerse
 import (
 	"github.com/jarrancarr/website"
 	"net/http"
+	"fmt"
+	"io/ioutil"
+	"strings"
 )
 
 type ECommerseService struct {
@@ -49,11 +52,18 @@ func (ecs *ECommerseService) GetCategories(w http.ResponseWriter, r *http.Reques
 	return "ok", nil
 } 
 func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
+	httpData, _ :=ioutil.ReadAll(r.Body)
+	requestedCategory := strings.Split(string(httpData),"=")[1]
+	fmt.Println("requestedCategory= "+requestedCategory)
 	prods := "{"
-	productList := ecs.catalog[r.Header.Get("selectedProduct")]
+	productList := ecs.catalog[requestedCategory]
 	for name, prod := range(productList) {
-		prods += ` "` + name + `" : "` + prod.Description + `"`
+		prods += ` "` + name + `" : "` + prod.Description + `", `
 	}
-	w.Write([]byte(prods + " }"))
+	if len(prods) > 2 {
+		w.Write([]byte(prods[:len(prods)-2] + " }"))
+	} else {
+		w.Write([]byte(prods + " }"))
+	}
 	return "ok", nil
 }

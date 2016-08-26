@@ -10,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"html/template"
+	"strconv"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -25,6 +27,9 @@ type Site struct {
 	UserSession           map[string]*Session
 	Service               map[string]Service
 	SiteProcessor         map[string]postFunc
+	Body                  map[string][]string
+	Data                  map[string][]template.HTML
+	Script                map[string][]template.JS
 }
 
 type Session struct {
@@ -37,7 +42,10 @@ func createSession() *Session {
 }
 
 func CreateSite(name, url string) *Site {
-	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, &html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil}
+	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, 
+		&html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil,
+		make(map[string][]string), make(map[string][]template.HTML),
+		make(map[string][]template.JS)}
 	return &site
 }
 
@@ -109,6 +117,58 @@ func (site *Site) AddService(name string, serve Service) Service {
 	}
 	site.Service[name] = serve
 	return serve
+}
+
+func (site *Site) AddScript(name, script string) *Site {
+	site.Script[name] = append(site.Script[name], template.JS(script))
+	return site
+}
+
+func (site *Site) AddBody(name, line string) *Site {
+	site.Body[name] = []string{}
+	quotes := false
+	stringbuild := ""
+	items := strings.Split(line, " ")
+	for _, item := range items {
+		if quotes {
+			stringbuild += item
+			if strings.HasSuffix(item, "\"") {
+				site.Body[name] = append(site.Body[name],stringbuild[:len(stringbuild)-1])
+				quotes = false
+			}
+		} else if strings.HasPrefix(item, "\"") {
+			quotes = true
+			stringbuild = item[1:]
+		} else {
+			site.Body[name] = append(site.Body[name],item)
+		}
+	}
+	return site
+}
+
+func (site *Site) item(name ...string) template.CSS {
+	var item []string
+	var index int64
+	var err error
+	if len(name) == 1 {
+		return template.CSS(site.fullBody(name[0]))
+	} 
+	item = site.Body[name[0]]
+	if strings.HasPrefix(name[1],"Body:") {
+		index, err = strconv.ParseInt(site.Body[strings.Split(name[1],":")[1]][0], 10, 64)
+	} else {
+		index, err = strconv.ParseInt(name[1], 10, 64)
+	}
+	if err != nil {
+		return template.CSS(item[0])
+	}
+	return template.CSS(item[index])
+}
+
+func (site *Site) fullBody(name string) string {
+	whole := ""
+	for _, s := range site.Body[name] { whole += " "+s }
+	return whole[1:]
 }
 
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {

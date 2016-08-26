@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"strconv"
+	//"fmt"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -17,10 +18,11 @@ type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string
 
 type Page struct {
 	Title, Url         string
-	Body               map[string]string
+	Body               map[string][]string
 	Data               map[string][]template.HTML
 	Script             map[string][]template.JS
 	Site               *Site
+	param			   map[string]string
 	postHandle         map[string]postFunc
 	ajaxHandle         map[string]postFunc
 	menus              *html.MenuIndex
@@ -71,6 +73,11 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	paramMap := r.URL.Query() 
+	page.param = make(map[string]string)
+	for key, _ := range paramMap {
+		page.param[key] = paramMap.Get(key)
+	}
 	if r.Method == "POST" {
 		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
 		http.Redirect(w, r, redirect, 302)
@@ -101,19 +108,35 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
-	var body map[string]string
+	var body map[string][]string
 	if title != "" {
 		filename := title + ".txt"
 		data, err := os.Open(filename)
 		if err != nil {
 			return nil, err
 		}
-		body = make(map[string]string)
+		body = make(map[string][]string)
 		r := bufio.NewReader(data)
 		s, _, e := r.ReadLine()
 		for e == nil {
 			field := strings.Split(string(s), ">>")
-			body[field[0]] = field[1]
+			items := strings.Split(field[1]," ")
+			quotes := false
+			stringbuild := ""
+			for _, item := range items {
+				if quotes {
+					stringbuild += item
+					if strings.HasSuffix(item, "\"") {
+						body[field[0]] = append(body[field[0]],stringbuild[:len(stringbuild)-1])
+						quotes = false
+					}
+				} else if strings.HasPrefix(item, "\"") {
+					quotes = true
+					stringbuild = item[1:]
+				} else {
+					body[field[0]] = append(body[field[0]],item)
+				}
+			}
 			s, _, e = r.ReadLine()
 		}
 	}
@@ -126,6 +149,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"service": page.service,
 			"page":    page.page,
 			"menu":    page.menu,
+			"param":   page.getParam,
 			"ajax":    page.ajax,
 			"target":  page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
@@ -156,6 +180,38 @@ func (page *Page) AddPage(name string, data *Page) *Page {
 		page.pages = &PageIndex{nil}
 	}
 	page.pages.AddPage(name, data)
+	return page
+}
+
+func (page *Page) AddScript(name, script string) *Page {
+	page.Script[name] = append(page.Script[name], template.JS(script))
+	return page
+}
+
+func (page *Page) AddData(name, data string) *Page {
+	page.Data[name] = append(page.Data[name], template.HTML(data))
+	return page
+}
+
+func (page *Page) AddBody(name, line string) *Page {
+	page.Body[name] = []string{}
+	quotes := false
+	stringbuild := ""
+	items := strings.Split(line, " ")
+	for _, item := range items {
+		if quotes {
+			stringbuild += item
+			if strings.HasSuffix(item, "\"") {
+				page.Body[name] = append(page.Body[name],stringbuild[:len(stringbuild)-1])
+				quotes = false
+			}
+		} else if strings.HasPrefix(item, "\"") {
+			quotes = true
+			stringbuild = item[1:]
+		} else {
+			page.Body[name] = append(page.Body[name],item)
+		}
+	}
 	return page
 }
 
@@ -201,15 +257,25 @@ func (page *Page) table(name string) template.HTML {
 	return template.HTML(page.tables.Ti[name].Render())
 }
 
-func (page *Page) page(name string) template.HTML {
-	if page.pages == nil || page.pages.Pi == nil || page.pages.Pi[name] == nil {
-		if page.Site.Pages == nil || page.Site.Pages.Pi == nil || page.Site.Pages.Pi[name] == nil {
+func (page *Page) page(name ...string) template.HTML {
+	if page.pages == nil || page.pages.Pi == nil || page.pages.Pi[name[0]] == nil {
+		if page.Site.Pages == nil || page.Site.Pages.Pi == nil || page.Site.Pages.Pi[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
 		} else {
-			return template.HTML(page.Site.Pages.Pi[name].Render())
+			for i, d := range(name) {
+				if i<1 { continue }
+				pair := strings.Split(d,">>")
+				page.Site.Pages.Pi[name[0]].AddBody(pair[0],pair[1])
+			}
+			return template.HTML(page.Site.Pages.Pi[name[0]].Render())
 		}
 	}
-	return template.HTML(page.pages.Pi[name].Render())
+	for i, d := range(name) {
+		if i<1 { continue }
+		pair := strings.Split(d,">>")
+		page.pages.Pi[name[0]].AddBody(pair[0],pair[1])
+	}
+	return template.HTML(page.pages.Pi[name[0]].Render())
 }
 
 func (page *Page) menu(name string) template.HTML {
@@ -222,20 +288,45 @@ func (page *Page) menu(name string) template.HTML {
 	return template.HTML(page.menus.Mi[name].Render())
 }
 
+// item pulls a string from the parameter text file by name and optionally a 
+// number indicating which index of that string to pull
 func (page *Page) item(name ...string) template.CSS {
+	if page.Body[name[0]] == nil {
+		return "" //page.Site.item(name)
+	}
+	var item []string
+	var index int64
+	var err error
 	if len(name) == 1 {
-		return template.CSS(page.Body[name[0]])
+		return template.CSS(page.fullBody(name[0]))
 	} 
-	item := strings.Split(page.Body[name[0]], " ")
-	index, err := strconv.ParseInt(name[1], 10, 32)
+	item = page.Body[name[0]]
+	if strings.HasPrefix(name[1],"Body:") {
+		index, err = strconv.ParseInt(page.Body[strings.Split(name[1],":")[1]][0], 10, 64)
+	} else {
+		index, err = strconv.ParseInt(name[1], 10, 64)
+	}
 	if err != nil {
 		return template.CSS(item[0])
 	}
 	return template.CSS(item[index])
 }
 
+func (page *Page) fullBody(name string) string {
+	whole := ""
+	for _, s := range page.Body[name] { whole += " "+s }
+	return whole[1:]
+}
+
 func (page *Page) service(data ...string) template.HTML {
 	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data))
+}
+
+func (page *Page) getParam(name string) string {
+	if page.param==nil || page.param[name]=="" {
+		return ""
+	}
+	return page.param[name]
 }
 
 func (page *Page) ajax(data ...string) template.HTML {
@@ -243,15 +334,28 @@ func (page *Page) ajax(data ...string) template.HTML {
 	handler := ""
 	trigger := ""
 	target := ""
+	onClick := ""
+	item := "$(document.createElement('li')).text( i + ' - ' + val )"
 	jsData := "'greet':'hello there, partner!'"
+	variables := ""
+	success := ""
 	for _, d := range(data) {
 		if strings.HasPrefix(d, "url:") { url = d[4:] }
 		if strings.HasPrefix(d, "handler:") { handler = d[8:] }
 		if strings.HasPrefix(d, "target:") { target = d[7:] }
 		if strings.HasPrefix(d, "trigger:") { trigger = d[8:] }
 		if strings.HasPrefix(d, "data:") { jsData = d[5:] }
+		if strings.HasPrefix(d, "item:") { item = d[5:] }
+		if strings.HasPrefix(d, "onclick:") { onClick = d[8:] }
+		if strings.HasPrefix(d, "var:") { variables += "var " + d[4:] + "; " }
+		if strings.HasPrefix(d, "success:") { success = d[8:] }
 	}
-	return template.HTML(`<script>
+	if success == "" {
+		success = `var ul = $( "<ul/>", {"class": "my-new-list"});
+			var obj = JSON.parse(data);	$("#`+target+`").empty(); $("#`+target+`").append(ul);
+			$.each(obj, function(i,val) { item =`+item+`; `+onClick+` ul.append( item ); });`
+	}
+	return template.HTML(`<script>`+variables+`
 		$(function() {
 			$('#`+trigger+`-trigger').on('click', function() {
 				$.ajax({
@@ -261,12 +365,7 @@ func (page *Page) ajax(data ...string) template.HTML {
 					dataType: 'html',
 					data: { `+jsData+` },
 					success: function(data, textStatus, jqXHR) {
-						var ul = $( "<ul/>", {"class": "my-new-list"});
-						var obj = JSON.parse(data);
-						$("#`+target+`").replaceWith(ul);
-						$.each(obj, function(i,val) {
-							ul.append( $(document.createElement('li')).text( i + "---" + val ) );
-						});						
+						`+success+`	
 					},
 					error: function(data, textStatus, jqXHR) {
 						console.log("button fail!");
@@ -277,6 +376,7 @@ func (page *Page) ajax(data ...string) template.HTML {
 	</script>`)
 }
 
+//sets up a div target for the ajax call
 func (page *Page) target(name string) template.HTML {
 	return template.HTML("<div id='"+name+"'></div>")
 }
