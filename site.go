@@ -131,7 +131,7 @@ func (site *Site) AddBody(name, line string) *Site {
 	items := strings.Split(line, " ")
 	for _, item := range items {
 		if quotes {
-			stringbuild += item
+			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
 				site.Body[name] = append(site.Body[name],stringbuild[:len(stringbuild)-1])
 				quotes = false

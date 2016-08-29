@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 	"strconv"
-	//"fmt"
+	"fmt"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -125,7 +125,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			stringbuild := ""
 			for _, item := range items {
 				if quotes {
-					stringbuild += item
+					stringbuild += " " + item
 					if strings.HasSuffix(item, "\"") {
 						body[field[0]] = append(body[field[0]],stringbuild[:len(stringbuild)-1])
 						quotes = false
@@ -150,6 +150,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"page":    page.page,
 			"menu":    page.menu,
 			"param":   page.getParam,
+			"getParamList":   page.getParamList,
 			"ajax":    page.ajax,
 			"target":  page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
@@ -200,7 +201,7 @@ func (page *Page) AddBody(name, line string) *Page {
 	items := strings.Split(line, " ")
 	for _, item := range items {
 		if quotes {
-			stringbuild += item
+			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
 				page.Body[name] = append(page.Body[name],stringbuild[:len(stringbuild)-1])
 				quotes = false
@@ -327,6 +328,13 @@ func (page *Page) getParam(name string) string {
 		return ""
 	}
 	return page.param[name]
+}
+
+func (page *Page) getParamList(name string) []string {
+	fmt.Println("getParamList with name= "+name)
+	fmt.Println("xlates to= "+page.param[name])
+	fmt.Println("first of body= "+page.Body[page.param[name]][0])
+	return page.Body[page.param[name]]
 }
 
 func (page *Page) ajax(data ...string) template.HTML {
