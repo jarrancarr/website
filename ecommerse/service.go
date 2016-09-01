@@ -12,9 +12,10 @@ type ECommerseService struct {
 	index   []Category
 	catalog map[string]map[string]Product
 	acs *website.AccountService
+	pages *website.PageIndex
 }
 func CreateService(acs *website.AccountService) *ECommerseService {
-	ecs := ECommerseService{nil, nil, acs}
+	ecs := ECommerseService{nil, nil, acs, nil}
 	return &ecs
 }
 func (ecs *ECommerseService) Status() string {
@@ -22,12 +23,18 @@ func (ecs *ECommerseService) Status() string {
 }
 func (ecs *ECommerseService) Execute(session *website.Session, data []string) string {
 	switch data[0] {
-	case "get":
+	case "product":
+		page := ecs.pages.Pi[data[1]]
+		product := ecs.catalog[data[2]][data[3]]
+		page.ClearData(data[2])
+		page.AddData(data[2],product.Description)
+		page.AddData(data[2],product.ImageName)
+		page.AddData(data[2],fmt.Sprintf("%.2f",float32(product.Price)/100.0))
 		return ""
 	}
 	return ""
 }
-func (ecs *ECommerseService) AddCategories(name, desc, image string) {
+func (ecs *ECommerseService) AddCategory(name, desc, image string) {
 	if ecs.index == nil {
 		ecs.index = make([]Category,0)
 	}
@@ -66,4 +73,14 @@ func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request,
 		w.Write([]byte(prods + " }"))
 	}
 	return "ok", nil
+}
+func (ecs *ECommerseService) AddPage(name string, page *website.Page) *ECommerseService {
+	if ecs.pages == nil { ecs.pages = &website.PageIndex{nil}	}
+	ecs.pages.AddPage(name, page)
+	return ecs
+}
+func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
+	//cart := cart(s.Item["cart"])
+	fmt.Println("Add to cart");
+	return "", nil
 }

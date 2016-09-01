@@ -49,7 +49,7 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 }
 
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	//fmt.Println("processing page: "+page.Title)
+	fmt.Println("processing page: "+page.Title)
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
 		if status != "ok" {
@@ -79,6 +79,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.param[key] = paramMap.Get(key)
 	}
 	if r.Method == "POST" {
+		fmt.Println("processing POST: "+r.FormValue("postProcessingHandler"))
 		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
 		http.Redirect(w, r, redirect, 302)
 		return
@@ -146,9 +147,12 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		template.FuncMap{
 			"table":   page.table,
 			"item":    page.item,
+			"body":    page.body,
 			"service": page.service,
 			"page":    page.page,
+			"debug":    page.debug,
 			"menu":    page.menu,
+			"data":    page.data,
 			"param":   page.getParam,
 			"getParamList":   page.getParamList,
 			"ajax":    page.ajax,
@@ -192,6 +196,10 @@ func (page *Page) AddScript(name, script string) *Page {
 func (page *Page) AddData(name, data string) *Page {
 	page.Data[name] = append(page.Data[name], template.HTML(data))
 	return page
+}
+
+func (page *Page) ClearData(name string) {
+	page.Data[name] = []template.HTML{}
 }
 
 func (page *Page) AddBody(name, line string) *Page {
@@ -279,6 +287,42 @@ func (page *Page) page(name ...string) template.HTML {
 	return template.HTML(page.pages.Pi[name[0]].Render())
 }
 
+func (page *Page) debug(name ...string) template.HTML {
+	all := "<br/><div class='debug'><p><code>page: "+page.Title
+	all += "<br/>&nbsp&nbspUrl: "+page.Url
+	all += "<br/>&nbsp&nbspBody: "
+	for key,val := range page.Body {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "
+		for _, w := range val { all += w + " " }
+	}
+	all += "<br/>&nbsp&nbspData: "
+	for key,val := range page.Data {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "
+		for _, w := range val { all += string(w) + " " }
+	}
+	all += "<br/>&nbsp&nbspScript: "
+	for key,val := range page.Script {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "
+		for _, w := range val { 
+			all += "<br/>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp"+string(w) 
+		}
+	}
+	all += "<br/>&nbsp&nbspparam: "
+	for key,val := range page.param {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "+val
+	}
+	all += "<br/>&nbsp&nbsppostHandle: "
+	for key,_ := range page.postHandle {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key
+	}
+	all += "<br/>&nbsp&nbspajaxHandle: "
+	for key,_ := range page.ajaxHandle {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key
+	}
+	all += "</code></p></div>"
+	return template.HTML(all)
+}
+
 func (page *Page) menu(name string) template.HTML {
 	if page.menus == nil || page.menus.Mi == nil || page.menus.Mi[name] == nil {
 		if page.Site.Menus == nil || page.Site.Menus.Mi[name] == nil {
@@ -292,6 +336,10 @@ func (page *Page) menu(name string) template.HTML {
 // item pulls a string from the parameter text file by name and optionally a 
 // number indicating which index of that string to pull
 func (page *Page) item(name ...string) template.CSS {
+	return template.CSS(page.body(name...))
+}
+
+func (page *Page) body(name ...string) string {
 	if page.Body[name[0]] == nil {
 		return "" //page.Site.item(name)
 	}
@@ -299,7 +347,7 @@ func (page *Page) item(name ...string) template.CSS {
 	var index int64
 	var err error
 	if len(name) == 1 {
-		return template.CSS(page.fullBody(name[0]))
+		return page.fullBody(name[0])
 	} 
 	item = page.Body[name[0]]
 	if strings.HasPrefix(name[1],"Body:") {
@@ -308,9 +356,9 @@ func (page *Page) item(name ...string) template.CSS {
 		index, err = strconv.ParseInt(name[1], 10, 64)
 	}
 	if err != nil {
-		return template.CSS(item[0])
+		return item[0]
 	}
-	return template.CSS(item[index])
+	return item[index]
 }
 
 func (page *Page) fullBody(name string) string {
@@ -320,7 +368,17 @@ func (page *Page) fullBody(name string) string {
 }
 
 func (page *Page) service(data ...string) template.HTML {
-	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data))
+	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data[1:]))
+}
+
+func (page *Page) data(data ...string) template.HTML {
+	if page.Data[data[0]] == nil { return "" }
+	item := page.Data[data[0]]
+	index, err := strconv.ParseInt(data[1], 10, 64)
+	if err != nil {
+		return template.HTML(item[0])
+	}
+	return template.HTML(item[index])
 }
 
 func (page *Page) getParam(name string) string {
