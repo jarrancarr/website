@@ -13,7 +13,7 @@ import (
 	"github.com/jarrancarr/website/html"
 )
 
-type postFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
+type postFunc func(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error)
 type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
 
 type Page struct {
@@ -22,7 +22,7 @@ type Page struct {
 	Data               map[string][]template.HTML
 	Script             map[string][]template.JS
 	Site               *Site
-	param			   map[string]string
+	Param			   map[string]string
 	postHandle         map[string]postFunc
 	ajaxHandle         map[string]postFunc
 	menus              *html.MenuIndex
@@ -51,7 +51,7 @@ func (pi *PageIndex) AddPage(name string, data *Page) {
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("processing page: "+page.Title)
 	for _, pFunc := range page.initProcessor {
-		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -59,7 +59,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	for key, pFunc := range page.Site.SiteProcessor {
 		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
-			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 			if status != "ok" {
 				http.Redirect(w, r, status, 302)
 				return
@@ -67,24 +67,36 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, pFunc := range page.preProcessor {
-		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}
 	paramMap := r.URL.Query() 
-	page.param = make(map[string]string)
+	page.Param = make(map[string]string)
 	for key, _ := range paramMap {
-		page.param[key] = paramMap.Get(key)
+		page.Param[key] = paramMap.Get(key)
 	}
 	if r.Method == "POST" {
-		fmt.Println("processing POST: "+r.FormValue("postProcessingHandler"))
-		redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
-		http.Redirect(w, r, redirect, 302)
+		//fmt.Println("processing POST: "+r.FormValue("postProcessingHandler"))
+		if page.postHandle[r.FormValue("postProcessingHandler")]==nil {
+			//fmt.Println("postProcessor is null")
+		} else {
+			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
+			if redirect != "" {
+				http.Redirect(w, r, redirect, 302)
+			} else {
+				activeSession = page.Site.GetCurrentSession(w, r)
+				err := page.tmpl.Execute(w, page)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
+			}
+		}
 		return
 	} else if r.Method == "AJAX" {
-		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r))
+		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -100,7 +112,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, pFunc := range page.postProcessor {
-		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r))
+		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -308,7 +320,7 @@ func (page *Page) debug(name ...string) template.HTML {
 		}
 	}
 	all += "<br/>&nbsp&nbspparam: "
-	for key,val := range page.param {
+	for key,val := range page.Param {
 		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "+val
 	}
 	all += "<br/>&nbsp&nbsppostHandle: "
@@ -382,17 +394,14 @@ func (page *Page) data(data ...string) template.HTML {
 }
 
 func (page *Page) getParam(name string) string {
-	if page.param==nil || page.param[name]=="" {
+	if page.Param==nil || page.Param[name]=="" {
 		return ""
 	}
-	return page.param[name]
+	return page.Param[name]
 }
 
 func (page *Page) getParamList(name string) []string {
-	fmt.Println("getParamList with name= "+name)
-	fmt.Println("xlates to= "+page.param[name])
-	fmt.Println("first of body= "+page.Body[page.param[name]][0])
-	return page.Body[page.param[name]]
+	return page.Body[page.Param[name]]
 }
 
 func (page *Page) ajax(data ...string) template.HTML {

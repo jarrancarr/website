@@ -100,7 +100,7 @@ func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Reque
 	return "login", nil
 }
 
-func (acs *AccountService) CheckSecure(w http.ResponseWriter, r *http.Request, s *Session) (string, error) {
+func (acs *AccountService) CheckSecure(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error) {
 	if s.Data["name"] == "Anonymous" || s.Data["name"] == "" {
 		if s != nil {
 			s.Data["status"] = "User credentials not recognized."

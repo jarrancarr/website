@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"strconv"
 )
 
 type ECommerseService struct {
@@ -31,6 +32,11 @@ func (ecs *ECommerseService) Execute(session *website.Session, data []string) st
 		page.AddData(data[2],product.ImageName)
 		page.AddData(data[2],fmt.Sprintf("%.2f",float32(product.Price)/100.0))
 		return ""
+	case "cart":
+		cart := getCart(session)
+		if data[1] == "count" {
+			return fmt.Sprintf("%d",len(cart.Line))
+		}
 	}
 	return ""
 }
@@ -79,8 +85,22 @@ func (ecs *ECommerseService) AddPage(name string, page *website.Page) *ECommerse
 	ecs.pages.AddPage(name, page)
 	return ecs
 }
-func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
-	//cart := cart(s.Item["cart"])
-	fmt.Println("Add to cart");
+func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	cart := getCart(s)
+	category, _ := strconv.Atoi(p.Param["category"])
+	item := ecs.catalog[p.Body["Category"][category]][r.FormValue("product")]
+	cart.addOrder(&Order{&item, 1})
 	return "", nil
+}
+
+func getCart(s *website.Session) *Cart {
+	var cart *Cart 
+	obj := s.Item["cart"]
+	if obj == nil {
+		cart = &Cart{}
+		s.Item["cart"] = cart
+	} else {
+		cart = obj.(*Cart)
+	}
+	return cart
 }

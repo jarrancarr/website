@@ -20,7 +20,7 @@ type Order struct {
 }
 
 type Cart struct {
-	line []Order
+	Line []*Order
 }
 
 func ProductNameList(list []Category) []string {
@@ -37,4 +37,8 @@ func loadCategories(name string) ([]Category, error) {
 
 func loadProducts(name string) ([]Product, error) {
 	return nil, nil
+}
+
+func (cart *Cart) addOrder(ord *Order) {
+	cart.Line = append(cart.Line, ord)
 }
