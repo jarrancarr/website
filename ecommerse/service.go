@@ -36,9 +36,30 @@ func (ecs *ECommerseService) Execute(session *website.Session, data []string) st
 		cart := getCart(session)
 		if data[1] == "count" {
 			return fmt.Sprintf("%d",len(cart.Line))
+		} else if data[1] == "isEmpty" {
+			if len(cart.Line) == 0 {
+				return "true"
+			} else {
+				return "false"
+			}
 		}
 	}
 	return ""
+}
+func (ecs *ECommerseService) Get(page *website.Page, session *website.Session, data []string) website.Item {
+	switch data[0] {
+	case "cart":
+		cart := getCart(session)
+		return cart
+	}
+	t := "Duke"
+	n := "Bingo"
+	d := "The Man!"
+	return struct {
+			Title, Name, Desc string
+		} {
+			t, n, d,
+		}
 }
 func (ecs *ECommerseService) AddCategory(name, desc, image string) {
 	if ecs.index == nil {
@@ -87,12 +108,17 @@ func (ecs *ECommerseService) AddPage(name string, page *website.Page) *ECommerse
 }
 func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	cart := getCart(s)
+	lang := s.GetLang()
 	category, _ := strconv.Atoi(p.Param["category"])
-	item := ecs.catalog[p.Body["Category"][category]][r.FormValue("product")]
+	item := ecs.catalog[p.Body[lang]["Category"][category]][r.FormValue("product")]
 	cart.addOrder(&Order{&item, 1})
 	return "", nil
 }
-
+func (ecs *ECommerseService) ClearCart(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	cart := getCart(s)
+	cart.Empty()
+	return "",nil
+}
 func getCart(s *website.Session) *Cart {
 	var cart *Cart 
 	obj := s.Item["cart"]

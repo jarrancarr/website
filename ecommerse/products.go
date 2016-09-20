@@ -40,5 +40,12 @@ func loadProducts(name string) ([]Product, error) {
 }
 
 func (cart *Cart) addOrder(ord *Order) {
+	if cart.Line == nil {
+		cart.Line = make([]*Order, 0)
+	}
 	cart.Line = append(cart.Line, ord)
+}
+
+func (cart *Cart) Empty() {
+	cart.Line = make([]*Order, 0)
 }

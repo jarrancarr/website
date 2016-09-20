@@ -84,6 +84,12 @@ func (acs *AccountService) Execute(session *Session, data []string) string {
 	return ""
 }
 
+func (acs *AccountService) Get(page *Page, session *Session, data []string) Item {
+	return struct { 
+		Title , Name, Desc string
+		} {"Duke","Bingo","The Man!"}
+}
+
 func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Request, s *Session) (string, error) {
 	userName := r.Form.Get("UserName")
 	password := r.Form.Get("Password")

@@ -27,7 +27,8 @@ type Site struct {
 	UserSession           map[string]*Session
 	Service               map[string]Service
 	SiteProcessor         map[string]postFunc
-	Body                  map[string][]string
+	ParamTriggerHandle    map[string]postFunc
+	Body                  map[string]map[string][]string
 	Data                  map[string][]template.HTML
 	Script                map[string][]template.JS
 }
@@ -37,18 +38,24 @@ type Session struct {
 	Data map[string]string
 }
 
+func (s *Session) GetLang() string {
+	lang := s.Data["language"]
+	if lang == "" {
+		return "en"
+	} 
+	return lang
+}
+
 func createSession() *Session {
 	return &Session{make(map[string]interface{}), make(map[string]string)}
 }
-
-func CreateSite(name, url string) *Site {
+func CreateSite(name, url, lang string) *Site {
 	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, 
-		&html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil,
-		make(map[string][]string), make(map[string][]template.HTML),
+		&html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil, nil,
+		make(map[string]map[string][]string), make(map[string][]template.HTML),
 		make(map[string][]template.JS)}
 	return &site
 }
-
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//err := site.home.tmpl.Execute(w, site.home)
 	err := site.Pages.Pi["home"].tmpl.Execute(w, site.Pages.Pi["home"])
@@ -56,7 +63,6 @@ func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
-
 func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Session {
 	sessionCookie, _ := r.Cookie(site.SiteSessionCookieName)
 	//	cookies := r.Cookies()
@@ -78,14 +84,12 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 	}
 	return nil
 }
-
 func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
 	if site.SiteProcessor == nil {
 		site.SiteProcessor = make(map[string]postFunc)
 	}
 	site.SiteProcessor[name] = initFunc
 }
-
 func (site *Site) AddMenu(name string) *html.HTMLMenu {
 	if site.Menus == nil {
 		site.Menus = &html.MenuIndex{nil}
@@ -93,9 +97,8 @@ func (site *Site) AddMenu(name string) *html.HTMLMenu {
 	site.Menus.AddMenu(name)
 	return site.Menus.Mi[name]
 }
-
-func (site *Site) AddPage(name, template, url string) *Page {
-	page, err := LoadPage(site, name, template, url)
+func (site *Site) AddPage(title, template, url string) *Page {
+	page, err := LoadPage(site, title, template, url)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -103,14 +106,13 @@ func (site *Site) AddPage(name, template, url string) *Page {
 	if site.Pages == nil {
 		site.Pages = &PageIndex{nil}
 	}
-	if name == "" {
+	if title == "" {
 		site.Pages.AddPage(template, page)
 	} else {
-		site.Pages.AddPage(name, page)
+		site.Pages.AddPage(title, page)
 	}
 	return page
 }
-
 func (site *Site) AddService(name string, serve Service) Service {
 	if site.Service == nil {
 		site.Service = make(map[string]Service)
@@ -118,14 +120,15 @@ func (site *Site) AddService(name string, serve Service) Service {
 	site.Service[name] = serve
 	return serve
 }
-
 func (site *Site) AddScript(name, script string) *Site {
 	site.Script[name] = append(site.Script[name], template.JS(script))
 	return site
 }
-
-func (site *Site) AddBody(name, line string) *Site {
-	site.Body[name] = []string{}
+func (site *Site) AddBody(lang, name, line string) *Site {
+	if site.Body[lang] == nil {
+		site.Body[lang] = make(map[string][]string)
+	}
+	site.Body[lang][name] = []string{}
 	quotes := false
 	stringbuild := ""
 	items := strings.Split(line, " ")
@@ -133,29 +136,35 @@ func (site *Site) AddBody(name, line string) *Site {
 		if quotes {
 			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
-				site.Body[name] = append(site.Body[name],stringbuild[:len(stringbuild)-1])
+				site.Body[lang][name] = append(site.Body[lang][name],stringbuild[:len(stringbuild)-1])
 				quotes = false
 			}
 		} else if strings.HasPrefix(item, "\"") {
 			quotes = true
 			stringbuild = item[1:]
 		} else {
-			site.Body[name] = append(site.Body[name],item)
+			site.Body[lang][name] = append(site.Body[lang][name],item)
 		}
 	}
 	return site
 }
-
-func (site *Site) item(name ...string) template.CSS {
+func (site *Site) AddParamTriggerHandler(name string, handle postFunc) *Site {
+	if site.ParamTriggerHandle == nil {
+		site.ParamTriggerHandle = make(map[string]postFunc)
+	}
+	site.ParamTriggerHandle[name] = handle
+	return site
+}
+func (site *Site) item(lang string, name ...string) template.CSS {
 	var item []string
 	var index int64
 	var err error
 	if len(name) == 1 {
-		return template.CSS(site.fullBody(name[0]))
+		return template.CSS(site.fullBody(lang, name[0]))
 	} 
-	item = site.Body[name[0]]
+	item = site.Body[lang][name[0]]
 	if strings.HasPrefix(name[1],"Body:") {
-		index, err = strconv.ParseInt(site.Body[strings.Split(name[1],":")[1]][0], 10, 64)
+		index, err = strconv.ParseInt(site.Body[lang][strings.Split(name[1],":")[1]][0], 10, 64)
 	} else {
 		index, err = strconv.ParseInt(name[1], 10, 64)
 	}
@@ -164,13 +173,11 @@ func (site *Site) item(name ...string) template.CSS {
 	}
 	return template.CSS(item[index])
 }
-
-func (site *Site) fullBody(name string) string {
+func (site *Site) fullBody(lang, name string) string {
 	whole := ""
-	for _, s := range site.Body[name] { whole += " "+s }
+	for _, s := range site.Body[lang][name] { whole += " "+s }
 	return whole[1:]
 }
-
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	r.ParseMultipartForm(32 << 20)
 	file, handler, err := r.FormFile("uploadfile")
@@ -188,7 +195,6 @@ func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	io.Copy(f, file)
 	site.ServeHTTP(w, r)
 }
-
 func ServeResource(w http.ResponseWriter, r *http.Request) {
 	path := ResourceDir + "/public" + r.URL.Path
 	if strings.HasSuffix(r.URL.Path, "js") {
