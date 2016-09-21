@@ -19,18 +19,20 @@ import (
 var ResourceDir = "../../"
 
 type Site struct {
-	Name, Url	          string
-	SiteSessionCookieName string
-	Tables                *html.TableIndex
-	Menus                 *html.MenuIndex
-	Pages                 *PageIndex
-	UserSession           map[string]*Session
-	Service               map[string]Service
-	SiteProcessor         map[string]postFunc
-	ParamTriggerHandle    map[string]postFunc
-	Body                  map[string]map[string][]string
-	Data                  map[string][]template.HTML
-	Script                map[string][]template.JS
+	Name, Url	          	string
+	SiteSessionCookieName 	string
+	Tables                	*html.TableIndex
+	Menus                 	*html.MenuIndex
+	Pages                 	*PageIndex
+	UserSession           	map[string]*Session
+	Service               	map[string]Service
+	SiteProcessor         	map[string]postFunc
+	ParamTriggerHandle    	map[string]postFunc
+	Body                  	map[string]map[string][]string
+	Data                  	map[string][]template.HTML
+	Script                	map[string][]template.JS
+	Param			    	map[string]string	
+	ParamList		    	map[string][]string
 }
 
 type Session struct {
@@ -53,7 +55,7 @@ func CreateSite(name, url, lang string) *Site {
 	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, 
 		&html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil, nil,
 		make(map[string]map[string][]string), make(map[string][]template.HTML),
-		make(map[string][]template.JS)}
+		make(map[string][]template.JS), nil, nil}
 	return &site
 }
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +148,20 @@ func (site *Site) AddBody(lang, name, line string) *Site {
 			site.Body[lang][name] = append(site.Body[lang][name],item)
 		}
 	}
+	return site
+}
+func (site *Site) AddParam(name, data string) *Site {
+	if (site.Param==nil) {
+		site.Param = make(map[string]string)
+	}
+	site.Param[name] = data
+	return site
+}
+func (site *Site) AddParamList(name string, data []string) *Site {
+	if (site.ParamList==nil) {
+		site.ParamList = make(map[string][]string)
+	}
+	site.ParamList[name] = data
 	return site
 }
 func (site *Site) AddParamTriggerHandler(name string, handle postFunc) *Site {

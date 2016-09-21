@@ -19,22 +19,25 @@ type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string
 
 type Page struct {
 	Title, Url          string
-	Body                map[string]map[string][]string
-	Data                map[string][]template.HTML
-	Script              map[string][]template.JS
-	Site                *Site
-	Param			    map[string]string
-	paramTriggerHandle  map[string]postFunc
-	postHandle          map[string]postFunc
-	ajaxHandle          map[string]postFunc
-	menus               *html.MenuIndex
-	tables              *html.TableIndex
-	tmpl                *template.Template
-	pages               *PageIndex
-	initProcessor       []postFunc // initial processors before site processors
-	preProcessor        []postFunc // processors after site processors
-	postProcessor       []postFunc // processors after page
-	bypassSiteProcessor map[string]bool
+	Body                map[string]map[string][]string 	// page Body Data: map[language][name][Array of string]
+	Data                map[string][]template.HTML		// for HTML item arrays
+	Script              map[string][]template.JS		// for javascript code arrays
+	Site                *Site							// reference to site
+	Param			    map[string]string				// temporary parameters
+	ParamList		    map[string][]string				// temporary parameters
+	ParamMap		    map[string]map[string]string	// temporary parameters
+	paramTriggerHandle  map[string]postFunc				// functions executed with URL parameters
+	postHandle          map[string]postFunc				// functions executed from a post request
+	ajaxHandle          map[string]postFunc				// functions that respond to AJAX requests
+	menus               *html.MenuIndex					// menus
+	tables              *html.TableIndex				// tables
+	tmpl                *template.Template				// this pages HTML template
+	pages               *PageIndex						// sub pages
+	Parent				*Page							// parent page
+	initProcessor       []postFunc 						// initial processors before site processors
+	preProcessor        []postFunc 						// processors after site processors
+	postProcessor       []postFunc 						// processors after page
+	bypassSiteProcessor map[string]bool					// any site processor to not precess for this page
 }
 
 type PageIndex struct {
@@ -88,20 +91,21 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	page := &Page{Title:title, Body:body, Site:site, Data:make(map[string][]template.HTML), Script:make(map[string][]template.JS)}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
-			"table":   page.table,
-			"item":    page.item,
-			"body":    page.body,
-			"service": page.service,
-			"get": 	   page.get,
-			"page":    page.page,
-			"debug":   page.debug,
-			"menu":    page.menu,
-			"data":    page.data,
-			"param":   page.getParam,
-			"session": page.getSessionParam,
-			"getParamList":   page.getParamList,
-			"ajax":    page.ajax,
-			"target":  page.target}).
+			"table":   		page.table,
+			"item":    		page.item,
+			"body":    		page.body,
+			"service": 		page.service,
+			"get": 	   		page.get,
+			"page":    		page.page,
+			"debug":   		page.debug,
+			"menu":    		page.menu,
+			"data":    		page.data,
+			"param":   		page.getParam,
+			"paramList":	page.getParamList,
+			"session": 		page.getSessionParam,
+			"getList": 		page.getList,
+			"ajax":    		page.ajax,
+			"target":  		page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -199,6 +203,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	activeSession.Data["navigation"]=r.RequestURI
 	pageLock.Unlock()
 }
 func (page *Page) AddMenu(name string) *html.HTMLMenu {
@@ -219,6 +224,7 @@ func (page *Page) AddPage(name string, data *Page) *Page {
 	if page.pages == nil {
 		page.pages = &PageIndex{nil}
 	}
+	data.Parent = page
 	page.pages.AddPage(name, data)
 	return page
 }
@@ -235,6 +241,13 @@ func (page *Page) AddParam(name, data string) *Page {
 		page.Param = make(map[string]string)
 	}
 	page.Param[name] = data
+	return page
+}
+func (page *Page) AddParamList(name string, data []string) *Page {
+	if (page.ParamList==nil) {
+		page.ParamList = make(map[string][]string)
+	}
+	page.ParamList[name] = data
 	return page
 }
 func (page *Page) ClearData(name string) {
@@ -371,17 +384,15 @@ func (page *Page) menu(name string) template.HTML {
 	return template.HTML(page.menus.Mi[name].Render())
 }
 
-// item pulls a string from the parameter text file by name and optionally a 
-// number indicating which index of that string to pull
-func (page *Page) item(name ...string) template.CSS {
-	return template.CSS(page.body(name...))
-}
 
-// retrieves a body item
-func (page *Page) body(name ...string) string {
-	lang := activeSession.GetLang()
-	if page.Body[lang][name[0]] == nil {
-		return "" //page.Site.item(name)
+
+func (page *Page) item(name ...string) template.CSS {		// item pulls a string from the parameter text file by name and optionally a 
+	return template.CSS(page.body(name...))					// number indicating which index of that string to pull
+}
+func (page *Page) body(name ...string) string {				// retrieves a body element as a string
+	lang := activeSession.GetLang()							// an index parameter will return the Nth in the array
+	if page.Body[lang][name[0]] == nil {					// 'param:temp' will populate the index parameter from the Param list
+		return ""											// 'language:xx' will get the paramater for language xx
 	}
 	var item []string
 	index := int64(-1)
@@ -404,18 +415,18 @@ func (page *Page) body(name ...string) string {
 	}
 	return item[index]
 }
-func (page *Page) fullBody(lang, name string) string {
+func (page *Page) fullBody(lang, name string) string {		// retrieves the entire line of text elements identified by that name
 	whole := ""
 	for _, s := range page.Body[lang][name] { whole += " "+s }
 	return whole[1:]
 }
-func (page *Page) service(data ...string) template.HTML {
+func (page *Page) service(data ...string) template.HTML {	// calls the service by its registered name
 	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data[1:]))
 }
-func (page *Page) get(data ...string) Item {
+func (page *Page) get(data ...string) Item {				// retireves an Item(interface{}) Object
 	return page.Site.Service[data[0]].Get(page, activeSession, data[1:])
 }
-func (page *Page) data(data ...string) template.HTML {
+func (page *Page) data(data ...string) template.HTML {		// retireves an HTML data element from the page's Data store
 	if page.Data[data[0]] == nil { return "" }
 	item := page.Data[data[0]]
 	index, err := strconv.ParseInt(data[1], 10, 64)
@@ -424,25 +435,31 @@ func (page *Page) data(data ...string) template.HTML {
 	}
 	return template.HTML(item[index])
 }
-func (page *Page) getParam(name string) string {
+func (page *Page) getParam(name string) string {			// returns a page's named paramater
 	if page.Param==nil || page.Param[name]=="" {
 		return ""
 	}
 	return page.Param[name]
 }
-func (page *Page) getSessionParam(name string) string {
+func (page *Page) getParamList(name string) []string {			// returns a page's named paramater
+	if page.ParamList==nil || page.ParamList[name]==nil {
+		return nil
+	}
+	return page.ParamList[name]
+}
+func (page *Page) getSessionParam(name string) string {		// returns a session paramater
 	if name=="language" {
 		return activeSession.GetLang()
 	}
 	return activeSession.Data[name]
 }
-func (page *Page) getParamList(name string) []string {
+func (page *Page) getList(name string) []string {			// returns a pages Body list via a page's paramater name
 	lang := activeSession.GetLang()
 	return page.Body[lang][page.Param[name]]
 }
-func (page *Page) ajax(data ...string) template.HTML {
-	url := page.Url
-	handler := ""
+func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call to retrieve data from the server.
+	url := page.Url											// this call should be accompanied by a target on the page
+	handler := ""											// and the AJAX Handler function
 	trigger := ""
 	target := ""
 	onClick := ""
