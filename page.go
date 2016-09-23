@@ -61,26 +61,28 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		r := bufio.NewReader(data)
 		s, _, e := r.ReadLine()
 		for e == nil {
-			if strings.HasPrefix(string(s), "<<lang>>") {
-				lang = string(s[8:])
-				body[lang] = make(map[string][]string)
-			} else {
-				field := strings.Split(string(s), ">>")
-				items := strings.Split(field[1]," ")
-				quotes := false
-				stringbuild := ""
-				for _, item := range items {
-					if quotes {
-						stringbuild += " " + item
-						if strings.HasSuffix(item, "\"") {
-							body[lang][field[0]] = append(body[lang][field[0]],stringbuild[:len(stringbuild)-1])
-							quotes = false
+			if string(s) != "" {
+				if strings.HasPrefix(string(s), "<<lang>>") {
+					lang = string(s[8:])
+					body[lang] = make(map[string][]string)
+				} else {
+					field := strings.Split(string(s), ">>")
+					items := strings.Split(field[1]," ")
+					quotes := false
+					stringbuild := ""
+					for _, item := range items {
+						if quotes {
+							stringbuild += " " + item
+							if strings.HasSuffix(item, "\"") {
+								body[lang][field[0]] = append(body[lang][field[0]],stringbuild[:len(stringbuild)-1])
+								quotes = false
+							}
+						} else if strings.HasPrefix(item, "\"") {
+							quotes = true
+							stringbuild = item[1:]
+						} else {
+							body[lang][field[0]] = append(body[lang][field[0]],item)
 						}
-					} else if strings.HasPrefix(item, "\"") {
-						quotes = true
-						stringbuild = item[1:]
-					} else {
-						body[lang][field[0]] = append(body[lang][field[0]],item)
 					}
 				}
 			}
