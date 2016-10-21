@@ -21,9 +21,9 @@ var ResourceDir = "../../"
 type Site struct {
 	Name, Url	          	string
 	SiteSessionCookieName 	string
-	Tables                	*html.TableIndex
-	Menus                 	*html.MenuIndex
+	Tables                	*html.TableStow
 	Pages                 	*PageIndex
+	html					map[string]*html.HTMLTag
 	UserSession           	map[string]*Session
 	Service               	map[string]Service
 	SiteProcessor         	map[string]postFunc
@@ -35,27 +35,14 @@ type Site struct {
 	ParamList		    	map[string][]string
 }
 
-type Session struct {
-	Item map[string]interface{}
-	Data map[string]string
-}
-
-func (s *Session) GetLang() string {
-	lang := s.Data["language"]
-	if lang == "" {
-		return "en"
-	} 
-	return lang
-}
-
-func createSession() *Session {
-	return &Session{make(map[string]interface{}), make(map[string]string)}
-}
 func CreateSite(name, url, lang string) *Site {
-	site := Site{name, url, name + "-cookie", &html.TableIndex{nil}, 
-		&html.MenuIndex{nil}, nil, make(map[string]*Session), nil, nil, nil,
-		make(map[string]map[string][]string), make(map[string][]template.HTML),
-		make(map[string][]template.JS), nil, nil}
+	site := Site{Name:name, Url:url, 
+				SiteSessionCookieName:name + "-cookie",
+				Tables:&html.TableStow{nil},
+				UserSession:make(map[string]*Session),
+				Body:make(map[string]map[string][]string), 
+				Data:make(map[string][]template.HTML),
+				Script:make(map[string][]template.JS)}
 	return &site
 }
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +68,7 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 			"localhost", time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
 		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)] = createSession()
 		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["name"] = "Anonymous"
+		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["id"] = base64.URLEncoding.EncodeToString(sessionKey)
 
 		return site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)]
 	}
@@ -91,13 +79,6 @@ func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
 		site.SiteProcessor = make(map[string]postFunc)
 	}
 	site.SiteProcessor[name] = initFunc
-}
-func (site *Site) AddMenu(name string) *html.HTMLMenu {
-	if site.Menus == nil {
-		site.Menus = &html.MenuIndex{nil}
-	}
-	site.Menus.AddMenu(name)
-	return site.Menus.Mi[name]
 }
 func (site *Site) AddPage(title, template, url string) *Page {
 	page, err := LoadPage(site, title, template, url)
@@ -188,6 +169,12 @@ func (site *Site) item(lang string, name ...string) template.CSS {
 		return template.CSS(item[0])
 	}
 	return template.CSS(item[index])
+}
+func (site *Site) GetHtml(name string) template.HTML {
+	if site.html == nil || site.html[name] == nil {
+		return ""
+	}
+	return template.HTML(site.html[name].Render())
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""

@@ -60,8 +60,7 @@ func (ecs *AccountService) Status() string {
 }
 
 func (acs *AccountService) Execute(session *Session, data []string) string {
-	//fmt.Println("Command: " + command + " for user:" + user + " with data:" + data)
-	switch data[1] {
+	switch data[0] {
 		case "getName":
 			return session.Data["name"]
 			break
@@ -90,7 +89,7 @@ func (acs *AccountService) Get(page *Page, session *Session, data []string) Item
 		} {"Duke","Bingo","The Man!"}
 }
 
-func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Request, s *Session) (string, error) {
+func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error) {
 	userName := r.Form.Get("UserName")
 	password := r.Form.Get("Password")
 

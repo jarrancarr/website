@@ -76,7 +76,7 @@ func (ecs *ECommerseService) AddProduct(category, name, desc, image string, pric
 	}
 	ecs.catalog[category][name] = Product{name, desc, image, price, stock}
 }
-func (ecs *ECommerseService) GetCategories(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
+func (ecs *ECommerseService) GetCategories(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	cats := "{"
 	for indx, cat := range(ecs.index) {
 		if indx > 0 { cats += ","	}
@@ -85,7 +85,7 @@ func (ecs *ECommerseService) GetCategories(w http.ResponseWriter, r *http.Reques
 	w.Write([]byte(cats + " }"))
 	return "ok", nil
 } 
-func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
+func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	httpData, _ :=ioutil.ReadAll(r.Body)
 	requestedCategory := strings.Split(string(httpData),"=")[1]
 	fmt.Println("requestedCategory= "+requestedCategory)

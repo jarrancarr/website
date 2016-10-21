@@ -4,7 +4,10 @@ import (
 	"time"
 	"github.com/jarrancarr/website"
 	"net/http"
-	//"fmt"
+	"fmt"
+	"io/ioutil"
+	"strings"
+	"strconv"
 )
 
 type Message struct {
@@ -43,14 +46,14 @@ func (mss *MessageService) Status() string {
 }
 func (mss *MessageService) createRoom(name, passCode, userName string) {
 	mss.room[name] = &Room{passCode, make([]Message,100), make(map[string] chan *Message,100), "", ""}
-	mss.join(name, userName)
+	//mss.join(name, userName)
 }
 func (mss *MessageService) join(roomName, userName string) {
 	ear := make(chan *Message)
 	user := mss.acs.GetUserSession(userName)
 	mss.room[roomName].ears[userName] = ear
 	pmq := PersonalMessageQueue{make([]*Message,100), 0, 0}
-	user.Item["MessageService-Queue-"+roomName] = pmq
+	user.AddItem("MessageService-Queue-"+roomName, pmq)
 	go pmq.listen(ear)
 }
 func (mss *MessageService) exit(roomName, userName string) {
@@ -71,7 +74,44 @@ func (pmq PersonalMessageQueue) listen(ear <-chan *Message) {
 	}
 }
 
-func (mss *MessageService) TestAJAX(w http.ResponseWriter, r *http.Request, s *website.Session) (string, error) {
+func (mss *MessageService) TestAJAX(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	w.Write([]byte(`{ "one": "Singular sensation", "two": "Beady little eyes", "three": "Little birds pitch by my doorstep"}`))
+	return "ok", nil
+}
+func (mss *MessageService) Get(page *website.Page, session *website.Session, data []string) website.Item {
+	switch data[0] {
+	}
+	t := "Duke"
+	n := "Bingo"
+	d := "The Man!"
+	return struct {
+			Title, Name, Desc string
+		} {
+			t, n, d,
+		}
+}
+
+func (mss *MessageService) PostStatement(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	w.Write([]byte(`{ "one": "Singular sensation", "two": "Beady little eyes", "three": "Little birds pitch by my doorstep"}`))
+	return "ok", nil
+}
+func (mss *MessageService) CreateRoom(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	httpData, _ :=ioutil.ReadAll(r.Body)
+	requestedRoom := strings.Split(string(httpData),"=")[1]
+	mss.createRoom(requestedRoom,"password",s.GetUserName())
+	fmt.Println("create room: "+requestedRoom)
+	roomList := "{"
+	first := true
+	for k,r := range(mss.room) {
+		if !first {
+			roomList += ","
+		} else {
+			first = false
+		}
+		roomList += `"`+k+`":`+strconv.Itoa(len(r.ears))
+	}
+	roomList += "}"
+	fmt.Println(roomList)
+	w.Write([]byte(roomList))
 	return "ok", nil
 }

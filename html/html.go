@@ -1,59 +1,86 @@
 package html
 
-type HTMLer interface {
-	AddClass() *HTMLer
-	AddId() *HTMLer
-	AddStyle() *HTMLer
+type HTMLTag struct {
+	tag, text string
+	attributes map[string]string
+	attributeList map[string][]string
+	child []HTMLTag
+	//class, id, style string
 }
 
-type HTMLElement struct {
-	class string
-	id    string
-	style string
+func (elem HTMLTag) AddAttribute(name, value string) *HTMLTag {
+	if elem.attributes == nil {
+		elem.attributes = make(map[string]string)
+	}
+	elem.attributes[name] = value
+	return &elem
+}
+func (elem HTMLTag) GetAttribute(name string) string {
+	return elem.attributes[name]
+}
+func (elem HTMLTag) GetId() string {
+	return elem.attributes["id"]
+}
+func (elem HTMLTag) GetClass() []string {
+	return elem.attributeList["class"]
+}
+func (elem HTMLTag) GetStyle() []string {
+	return elem.attributeList["style"]
+}
+func (elem HTMLTag) RemoveAttribute(name string) *HTMLTag {
+	elem.attributes[name] = ""
+	return &elem
+}
+func (elem HTMLTag) AddClass(value string) *HTMLTag {
+	if elem.attributeList == nil {
+		elem.attributeList = make(map[string][]string)
+	}
+	if elem.attributeList["class"] == nil {
+		elem.attributeList["class"] = make([]string,2)
+	} 
+	elem.attributeList["class"] = append(elem.attributeList["class"], value)
+	return &elem
+}
+func (elem HTMLTag) RemoveClass(value string) *HTMLTag {
+	for i,v := range(elem.attributeList["class"]) {
+		if v == value {
+			elem.attributeList["class"] = append(elem.attributeList["class"][:i],elem.attributeList["class"][i+1:]...)
+			break;
+		}
+	}
+	return &elem
+}
+func (elem HTMLTag) ReplaceText(text string) *HTMLTag {
+	elem.text = text
+	return &elem
+}
+func (elem HTMLTag) AppendText(text string) *HTMLTag {
+	elem.text += text
+	return &elem
+}
+func (elem HTMLTag) AppendChild(tag HTMLTag) *HTMLTag {
+	if (elem.child == nil) {
+		elem.child = make([]HTMLTag,10)
+	}
+	elem.child = append(elem.child, tag)
+	return &elem
+}
+func (elem HTMLTag) Render() string {
+	element := "<" + elem.tag	
+	for k,v := range(elem.attributes) {
+		element += " "+k+"=\"" + v + "\" "
+	}
+	if elem.child == nil {
+		return element + "/>"
+	}
+	element += ">"
+	for _,c := range(elem.child) {
+		element += c.Render()
+	}
+	return element + "</" + elem.tag + ">"
 }
 
-type HTMLLink struct {
-	Data string
-	Url  string
-	Cis  HTMLElement
-}
 
-func Link(data, url string) HTMLLink {
-	return HTMLLink{data, url, HTMLElement{"", "", ""}}
-}
-
-func (elem *HTMLElement) AddClass(class string) {
-	if elem.class != "" {
-		elem.class += " "
-	}
-	elem.class += class
-}
-func (elem *HTMLElement) AddId(id string) {
-	if elem.id != "" {
-		elem.id += " "
-	}
-	elem.id += id
-}
-func (elem *HTMLElement) AddStyle(style string) {
-	if elem.style != "" {
-		elem.style += " "
-	}
-	elem.style += style
-}
-
-func (elem HTMLLink) Render() string {
-	return elem.Cis.Render("u") + "</u>"
-}
-func (elem HTMLElement) Render(tag string) string {
-	element := "<" + tag
-	if elem.id != "" {
-		element += " id=\"" + elem.id + "\" "
-	}
-	if elem.class != "" {
-		element += " class=\"" + elem.class + "\" "
-	}
-	if elem.style != "" {
-		element += " style=\"" + elem.style + "\" "
-	}
-	return element + ">"
+func NewTag(tag, id, class, style, text string) HTMLTag {
+	return HTMLTag{tag, text, nil, nil, nil}
 }

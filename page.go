@@ -14,23 +14,21 @@ import (
 	"github.com/jarrancarr/website/html"
 )
 
-type postFunc func(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error)
-type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
-
 type Page struct {
 	Title, Url          string
 	Body                map[string]map[string][]string 	// page Body Data: map[language][name][Array of string]
 	Data                map[string][]template.HTML		// for HTML item arrays
 	Script              map[string][]template.JS		// for javascript code arrays
+	html				map[string]*html.HTMLTag		// generic html tag snippets
 	Site                *Site							// reference to site
-	Param			    map[string]string				// temporary parameters
+	Elements		    map[string]string				// site scope parameters
+	Param			    map[string]string				// page scope temporary parameters
 	ParamList		    map[string][]string				// temporary parameters
 	ParamMap		    map[string]map[string]string	// temporary parameters
 	paramTriggerHandle  map[string]postFunc				// functions executed with URL parameters
 	postHandle          map[string]postFunc				// functions executed from a post request
 	ajaxHandle          map[string]postFunc				// functions that respond to AJAX requests
-	menus               *html.MenuIndex					// menus
-	tables              *html.TableIndex				// tables
+	tables              *html.TableStow					// tables
 	tmpl                *template.Template				// this pages HTML template
 	pages               *PageIndex						// sub pages
 	Parent				*Page							// parent page
@@ -100,7 +98,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"get": 	   		page.get,
 			"page":    		page.page,
 			"debug":   		page.debug,
-			"menu":    		page.menu,
+			"html":    		page.getHtml,
 			"data":    		page.data,
 			"param":   		page.getParam,
 			"paramList":	page.getParamList,
@@ -192,6 +190,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pageLock.Unlock()
 		return
 	} else {
+		// A normal GET request
 		err := page.tmpl.Execute(w, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -208,19 +207,12 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	activeSession.Data["navigation"]=r.RequestURI
 	pageLock.Unlock()
 }
-func (page *Page) AddMenu(name string) *html.HTMLMenu {
-	if page.menus == nil {
-		page.menus = &html.MenuIndex{nil}
-	}
-	page.menus.AddMenu(name)
-	return page.menus.Mi[name]
-}
 func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable {
 	if page.tables == nil {
-		page.tables = &html.TableIndex{nil}
+		page.tables = &html.TableStow{nil}
 	}
 	page.tables.AddTable(name, headers, data)
-	return page.tables.Ti[name]
+	return page.tables.Ts[name]
 }
 func (page *Page) AddPage(name string, data *Page) *Page {
 	if page.pages == nil {
@@ -313,10 +305,10 @@ func (page *Page) AddBypassSiteProcessor(name string) {
 	page.bypassSiteProcessor[name] = true
 }
 func (page *Page) table(name string) template.HTML {
-	if page.tables.Ti[name] == nil {
-		return template.HTML(page.Site.Tables.Ti[name].Render())
+	if page.tables.Ts[name] == nil {
+		return template.HTML(page.Site.Tables.Ts[name].Render())
 	}
-	return template.HTML(page.tables.Ti[name].Render())
+	return template.HTML(page.tables.Ts[name].Render())
 }
 func (page *Page) page(name ...string) template.HTML {
 	if page.pages == nil || page.pages.Pi == nil || page.pages.Pi[name[0]] == nil {
@@ -376,18 +368,15 @@ func (page *Page) debug(name ...string) template.HTML {
 	all += "</code></p></div>"
 	return template.HTML(all)
 }
-func (page *Page) menu(name string) template.HTML {
-	if page.menus == nil || page.menus.Mi == nil || page.menus.Mi[name] == nil {
-		if page.Site.Menus == nil || page.Site.Menus.Mi[name] == nil {
-			return ""
+func (page *Page) getHtml(name string) template.HTML {
+	if page.html == nil || page.html[name] == nil {
+		if page.Parent == nil {
+			return page.Site.GetHtml(name)
 		}
-		return template.HTML(page.Site.Menus.Mi[name].Render())
+		return page.Parent.getHtml(name)
 	}
-	return template.HTML(page.menus.Mi[name].Render())
+	return template.HTML(page.html[name].Render())
 }
-
-
-
 func (page *Page) item(name ...string) template.CSS {		// item pulls a string from the parameter text file by name and optionally a 
 	return template.CSS(page.body(name...))					// number indicating which index of that string to pull
 }
@@ -439,7 +428,7 @@ func (page *Page) data(data ...string) template.HTML {		// retireves an HTML dat
 }
 func (page *Page) getParam(name string) string {			// returns a page's named paramater
 	if page.Param==nil || page.Param[name]=="" {
-		return ""
+		return name
 	}
 	return page.Param[name]
 }
@@ -469,16 +458,20 @@ func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call 
 	jsData := "'greet':'hello there, partner!'"
 	variables := ""
 	success := ""
+	setup := ""
+	post := ""
 	for _, d := range(data) {
-		if strings.HasPrefix(d, "url:") { url = d[4:] }
+		if strings.HasPrefix(d, "url:") { url = page.getParam(d[4:]) }
 		if strings.HasPrefix(d, "handler:") { handler = d[8:] }
 		if strings.HasPrefix(d, "target:") { target = d[7:] }
 		if strings.HasPrefix(d, "trigger:") { trigger = d[8:] }
-		if strings.HasPrefix(d, "data:") { jsData = d[5:] }
+		if strings.HasPrefix(d, "data:") { jsData = page.getParam(d[5:]) }
 		if strings.HasPrefix(d, "item:") { item = d[5:] }
-		if strings.HasPrefix(d, "onclick:") { onClick = d[8:] }
+		if strings.HasPrefix(d, "onclick:") { onClick = page.getParam(d[8:]) }
 		if strings.HasPrefix(d, "var:") { variables += "var " + d[4:] + "; " }
-		if strings.HasPrefix(d, "success:") { success = d[8:] }
+		if strings.HasPrefix(d, "success:") { success = page.getParam(d[8:]) }
+		if strings.HasPrefix(d, "setup:") { setup = "\n"+page.getParam(d[6:]) }
+		if strings.HasPrefix(d, "post:") { post = "\n"+page.getParam(d[5:]) }
 	}
 	if success == "" {
 		success = `var ul = $( "<ul/>", {"class": "my-new-list"});
@@ -487,7 +480,8 @@ func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call 
 	}
 	return template.HTML(`<script>`+variables+`
 		$(function() {
-			$('#`+trigger+`-trigger').on('click', function() {
+			$('#`+trigger+`-trigger').on('click', function() {`+
+				setup+`
 				$.ajax({
 					url: '/`+url+`',
 					type: 'AJAX',
@@ -500,7 +494,8 @@ func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call 
 					error: function(data, textStatus, jqXHR) {
 						console.log("button fail!");
 					}
-				});
+				});`+
+				post+`
 			});
 		});
 	</script>`)
