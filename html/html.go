@@ -1,5 +1,9 @@
 package html
 
+import (
+	"strings"
+)
+
 type HTMLTag struct {
 	tag, text string
 	attributes map[string]string
@@ -8,28 +12,74 @@ type HTMLTag struct {
 	//class, id, style string
 }
 
-func (elem HTMLTag) AddAttribute(name, value string) *HTMLTag {
+type HTMLStow struct {
+	Hs map[string]*HTMLTag
+}
+
+func (hs *HTMLStow) Add(name, tag string, data []string) *HTMLStow {
+	hs.prep()
+	*hs.Hs[name] = NewTag(tag, "", "", "", "")
+	for _, d := range(data) {
+		if strings.Contains(d,":::") { 
+			hs.Hs[name].AddAttribute(d[:strings.Index(d,":::")], d[strings.Index(d,":::")+3:])
+		} else {
+			hs.Hs[name].AppendText(d)
+		}
+	}
+	return hs
+}
+
+func (hs *HTMLStow) AddTo(name, tag string, data []string) *HTMLStow {
+	if hs.Hs == nil || hs.Hs[name] == nil {
+		return hs
+	}
+	child := NewTag(tag, "", "", "", "")
+	for _, d := range(data) {
+		if strings.Contains(d,":::") { 
+			child.AddAttribute(d[:strings.Index(d,":::")], d[strings.Index(d,":::")+3:])
+		} else {
+			child.AppendText(d)
+		}
+	}
+	hs.Hs[name].AppendChild(child)
+	return hs
+}
+
+func (hs *HTMLStow) Tag(name string, tag *HTMLTag) *HTMLStow {
+	hs.prep()
+	hs.Hs[name] = tag
+	return hs
+}
+
+func (hs *HTMLStow) prep() {
+	if hs.Hs == nil {
+		hs.Hs = make(map[string]*HTMLTag)
+	}
+}
+
+
+func (elem *HTMLTag) AddAttribute(name, value string) *HTMLTag {
 	if elem.attributes == nil {
 		elem.attributes = make(map[string]string)
 	}
 	elem.attributes[name] = value
-	return &elem
+	return elem
 }
-func (elem HTMLTag) GetAttribute(name string) string {
+func (elem *HTMLTag) GetAttribute(name string) string {
 	return elem.attributes[name]
 }
-func (elem HTMLTag) GetId() string {
+func (elem *HTMLTag) GetId() string {
 	return elem.attributes["id"]
 }
-func (elem HTMLTag) GetClass() []string {
+func (elem *HTMLTag) GetClass() []string {
 	return elem.attributeList["class"]
 }
-func (elem HTMLTag) GetStyle() []string {
+func (elem *HTMLTag) GetStyle() []string {
 	return elem.attributeList["style"]
 }
-func (elem HTMLTag) RemoveAttribute(name string) *HTMLTag {
+func (elem *HTMLTag) RemoveAttribute(name string) *HTMLTag {
 	elem.attributes[name] = ""
-	return &elem
+	return elem
 }
 func (elem HTMLTag) AddClass(value string) *HTMLTag {
 	if elem.attributeList == nil {
@@ -41,29 +91,29 @@ func (elem HTMLTag) AddClass(value string) *HTMLTag {
 	elem.attributeList["class"] = append(elem.attributeList["class"], value)
 	return &elem
 }
-func (elem HTMLTag) RemoveClass(value string) *HTMLTag {
+func (elem *HTMLTag) RemoveClass(value string) *HTMLTag {
 	for i,v := range(elem.attributeList["class"]) {
 		if v == value {
 			elem.attributeList["class"] = append(elem.attributeList["class"][:i],elem.attributeList["class"][i+1:]...)
 			break;
 		}
 	}
-	return &elem
+	return elem
 }
-func (elem HTMLTag) ReplaceText(text string) *HTMLTag {
+func (elem *HTMLTag) ReplaceText(text string) *HTMLTag {
 	elem.text = text
-	return &elem
+	return elem
 }
-func (elem HTMLTag) AppendText(text string) *HTMLTag {
+func (elem *HTMLTag) AppendText(text string) *HTMLTag {
 	elem.text += text
-	return &elem
+	return elem
 }
-func (elem HTMLTag) AppendChild(tag HTMLTag) *HTMLTag {
+func (elem *HTMLTag) AppendChild(tag HTMLTag) *HTMLTag {
 	if (elem.child == nil) {
 		elem.child = make([]HTMLTag,10)
 	}
 	elem.child = append(elem.child, tag)
-	return &elem
+	return elem
 }
 func (elem HTMLTag) Render() string {
 	element := "<" + elem.tag	
@@ -80,7 +130,9 @@ func (elem HTMLTag) Render() string {
 	return element + "</" + elem.tag + ">"
 }
 
-
 func NewTag(tag, id, class, style, text string) HTMLTag {
 	return HTMLTag{tag, text, nil, nil, nil}
+}
+func MakeStow() *HTMLStow {
+	return &HTMLStow{make(map[string]*HTMLTag)}
 }

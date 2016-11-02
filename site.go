@@ -22,7 +22,8 @@ type Site struct {
 	Name, Url	          	string
 	SiteSessionCookieName 	string
 	Tables                	*html.TableStow
-	Pages                 	*PageIndex
+	Html					*html.HTMLStow					// generic html tag snippets
+	Pages                 	*PageStow
 	html					map[string]*html.HTMLTag
 	UserSession           	map[string]*Session
 	Service               	map[string]Service
@@ -47,7 +48,7 @@ func CreateSite(name, url, lang string) *Site {
 }
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	//err := site.home.tmpl.Execute(w, site.home)
-	err := site.Pages.Pi["home"].tmpl.Execute(w, site.Pages.Pi["home"])
+	err := site.Pages.Ps["home"].tmpl.Execute(w, site.Pages.Ps["home"])
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -87,7 +88,7 @@ func (site *Site) AddPage(title, template, url string) *Page {
 		os.Exit(1)
 	}
 	if site.Pages == nil {
-		site.Pages = &PageIndex{nil}
+		site.Pages = &PageStow{nil}
 	}
 	if title == "" {
 		site.Pages.AddPage(template, page)
@@ -171,10 +172,10 @@ func (site *Site) item(lang string, name ...string) template.CSS {
 	return template.CSS(item[index])
 }
 func (site *Site) GetHtml(name string) template.HTML {
-	if site.html == nil || site.html[name] == nil {
+	if site.Html == nil || site.Html.Hs[name] == nil {
 		return ""
 	}
-	return template.HTML(site.html[name].Render())
+	return template.HTML(site.Html.Hs[name].Render())
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""

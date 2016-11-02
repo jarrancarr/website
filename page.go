@@ -16,30 +16,27 @@ import (
 
 type Page struct {
 	Title, Url          string
-	Body                map[string]map[string][]string 	// page Body Data: map[language][name][Array of string]
-	Data                map[string][]template.HTML		// for HTML item arrays
-	Script              map[string][]template.JS		// for javascript code arrays
-	html				map[string]*html.HTMLTag		// generic html tag snippets
+	Data                map[string]map[string][]string 	// page Data: map[language][name][Array of string]
+	DataMap		    	map[string]map[string]string	// parameter map
+	Html				*html.HTMLStow					// generic html tag snippets
 	Site                *Site							// reference to site
-	Elements		    map[string]string				// site scope parameters
-	Param			    map[string]string				// page scope temporary parameters
-	ParamList		    map[string][]string				// temporary parameters
-	ParamMap		    map[string]map[string]string	// temporary parameters
+	Parent				*Page							// parent page
+	pages               *PageStow						// sub pages
+	tables              *html.TableStow					// tables
+	Param			    map[string]string				// parameters: scope - name
+	ParamList		    map[string][]string				// parameter list: scope - name
 	paramTriggerHandle  map[string]postFunc				// functions executed with URL parameters
 	postHandle          map[string]postFunc				// functions executed from a post request
 	ajaxHandle          map[string]postFunc				// functions that respond to AJAX requests
-	tables              *html.TableStow					// tables
 	tmpl                *template.Template				// this pages HTML template
-	pages               *PageIndex						// sub pages
-	Parent				*Page							// parent page
 	initProcessor       []postFunc 						// initial processors before site processors
 	preProcessor        []postFunc 						// processors after site processors
 	postProcessor       []postFunc 						// processors after page
 	bypassSiteProcessor map[string]bool					// any site processor to not precess for this page
 }
 
-type PageIndex struct {
-	Pi map[string]*Page
+type PageStow struct {
+	Ps map[string]*Page
 }
 
 var activeSession *Session
@@ -88,12 +85,11 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{Title:title, Body:body, Site:site, Data:make(map[string][]template.HTML), Script:make(map[string][]template.JS)}
+	page := &Page{	Title:title, Data:body, Site:site, Html:html.MakeStow()}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   		page.table,
 			"item":    		page.item,
-			"body":    		page.body,
 			"service": 		page.service,
 			"get": 	   		page.get,
 			"page":    		page.page,
@@ -103,7 +99,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"param":   		page.getParam,
 			"paramList":	page.getParamList,
 			"session": 		page.getSessionParam,
-			"getList": 		page.getList,
+			"getList": 		page.getListByParam,
 			"ajax":    		page.ajax,
 			"target":  		page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
@@ -112,16 +108,15 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	}
 	return page, nil
 }
-func (pi *PageIndex) AddPage(name string, data *Page) {
-	if pi.Pi == nil {
-		pi.Pi = make(map[string]*Page)
+func (ps *PageStow) AddPage(name string, data *Page) {
+	if ps.Ps == nil {
+		ps.Ps = make(map[string]*Page)
 	}
-	pi.Pi[name] = data
+	ps.Ps[name] = data
 }
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	pageLock.Lock()
 	activeSession = page.Site.GetCurrentSession(w, r)
-	//fmt.Println("processing page: "+page.Title)
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
@@ -149,7 +144,6 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	paramMap := r.URL.Query() 
-	page.Param = make(map[string]string)
 	for key, _ := range paramMap {
 		page.Param[key] = paramMap.Get(key)
 	}
@@ -163,9 +157,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	if r.Method == "POST" {
-		//fmt.Println("processing POST: "+r.FormValue("postProcessingHandler"))
 		if page.postHandle[r.FormValue("postProcessingHandler")]==nil {
-			//fmt.Println("postProcessor is null")
 		} else {
 			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, activeSession, page)
 			if redirect != "" {
@@ -216,18 +208,10 @@ func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable 
 }
 func (page *Page) AddPage(name string, data *Page) *Page {
 	if page.pages == nil {
-		page.pages = &PageIndex{nil}
+		page.pages = &PageStow{nil}
 	}
 	data.Parent = page
 	page.pages.AddPage(name, data)
-	return page
-}
-func (page *Page) AddScript(name, script string) *Page {
-	page.Script[name] = append(page.Script[name], template.JS(script))
-	return page
-}
-func (page *Page) AddData(name, data string) *Page {
-	page.Data[name] = append(page.Data[name], template.HTML(data))
 	return page
 }
 func (page *Page) AddParam(name, data string) *Page {
@@ -244,11 +228,8 @@ func (page *Page) AddParamList(name string, data []string) *Page {
 	page.ParamList[name] = data
 	return page
 }
-func (page *Page) ClearData(name string) {
-	page.Data[name] = []template.HTML{}
-}
-func (page *Page) AddBody(lang, name, line string) *Page {
-	page.Body[lang][name] = []string{}
+func (page *Page) AddData(lang, name, line string) *Page {
+	page.Data[lang][name] = []string{}
 	quotes := false
 	stringbuild := ""
 	items := strings.Split(line, " ")
@@ -256,14 +237,14 @@ func (page *Page) AddBody(lang, name, line string) *Page {
 		if quotes {
 			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
-				page.Body[lang][name] = append(page.Body[lang][name],stringbuild[:len(stringbuild)-1])
+				page.Data[lang][name] = append(page.Data[lang][name],stringbuild[:len(stringbuild)-1])
 				quotes = false
 			}
 		} else if strings.HasPrefix(item, "\"") {
 			quotes = true
 			stringbuild = item[1:]
 		} else {
-			page.Body[lang][name] = append(page.Body[lang][name],item)
+			page.Data[lang][name] = append(page.Data[lang][name],item)
 		}
 	}
 	return page
@@ -311,46 +292,34 @@ func (page *Page) table(name string) template.HTML {
 	return template.HTML(page.tables.Ts[name].Render())
 }
 func (page *Page) page(name ...string) template.HTML {
-	if page.pages == nil || page.pages.Pi == nil || page.pages.Pi[name[0]] == nil {
-		if page.Site.Pages == nil || page.Site.Pages.Pi == nil || page.Site.Pages.Pi[name[0]] == nil {
+	if page.pages == nil || page.pages.Ps == nil || page.pages.Ps[name[0]] == nil {
+		if page.Site.Pages == nil || page.Site.Pages.Ps == nil || page.Site.Pages.Ps[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
 		} else {
 			for i, d := range(name) {
 				if i<1 { continue }
 				pair := strings.Split(d,">>")
-				page.Site.Pages.Pi[name[0]].AddParam(pair[0],pair[1])
+				page.Site.Pages.Ps[name[0]].AddParam(pair[0],pair[1])
 			}
-			return template.HTML(page.Site.Pages.Pi[name[0]].Render())
+			return template.HTML(page.Site.Pages.Ps[name[0]].Render())
 		}
 	}
 	for i, d := range(name) {
 		if i<1 { continue }
 		pair := strings.Split(d,">>")
-		page.pages.Pi[name[0]].AddParam(pair[0],pair[1])
+		page.pages.Ps[name[0]].AddParam(pair[0],pair[1])
 	}
-	return template.HTML(page.pages.Pi[name[0]].Render())
+	return template.HTML(page.pages.Ps[name[0]].Render())
 }
 func (page *Page) debug(name ...string) template.HTML {
 	all := "<br/><div class='debug'><p><code>page: "+page.Title
 	all += "<br/>&nbsp&nbspUrl: "+page.Url
-	all += "<br/>&nbsp&nbspBody: "
-	for lang, book := range page.Body {
+	all += "<br/>&nbsp&nbspData: "
+	for lang, book := range page.Data {
 		all += "<br/>&nbsp&nbsp&nbsp&nbspFor language: "+lang
 		for key,val := range book {
 			all += "<br/>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp"+key+": "
 			for _, w := range val { all += w + " " }
-		}
-	}
-	all += "<br/>&nbsp&nbspData: "
-	for key,val := range page.Data {
-		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "
-		for _, w := range val { all += string(w) + " " }
-	}
-	all += "<br/>&nbsp&nbspScript: "
-	for key,val := range page.Script {
-		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "
-		for _, w := range val { 
-			all += "<br/>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp"+string(w) 
 		}
 	}
 	all += "<br/>&nbsp&nbspparam: "
@@ -369,62 +338,57 @@ func (page *Page) debug(name ...string) template.HTML {
 	return template.HTML(all)
 }
 func (page *Page) getHtml(name string) template.HTML {
-	if page.html == nil || page.html[name] == nil {
+	if page.Html == nil {
 		if page.Parent == nil {
 			return page.Site.GetHtml(name)
 		}
 		return page.Parent.getHtml(name)
 	}
-	return template.HTML(page.html[name].Render())
+	return template.HTML(page.Html.Hs[name].Render())
 }
 func (page *Page) item(name ...string) template.CSS {		// item pulls a string from the parameter text file by name and optionally a 
-	return template.CSS(page.body(name...))					// number indicating which index of that string to pull
+	return template.CSS(page.data(name...))					// number indicating which index of that string to pull
 }
-func (page *Page) body(name ...string) string {				// retrieves a body element as a string
+func (page *Page) data(name ...string) string {				// retrieves a data element as a string
 	lang := activeSession.GetLang()							// an index parameter will return the Nth in the array
-	if page.Body[lang][name[0]] == nil {					// 'param:temp' will populate the index parameter from the Param list
+	if page.Data[lang][name[0]] == nil {					// 'param:temp' will populate the index parameter from the Param list
 		return ""											// 'language:xx' will get the paramater for language xx
 	}
 	var item []string
 	index := int64(-1)
 	var err error
 	if len(name) == 1 {
-		return page.fullBody(lang, name[0])
+		return page.readLine(lang, name[0])
 	} 
 	for _, asdf := range(name[1:]) {
 		if strings.HasPrefix(asdf,"param:") {
-			index, err = strconv.ParseInt(page.Param[strings.Split(asdf,":")[1]], 10, 64)
+			param := strings.Split(asdf,":")
+			index, err = strconv.ParseInt(page.Param[param[1]], 10, 64)
 		} else if strings.HasPrefix(asdf,"language:") {
 			lang = asdf[9:]
 		} else {
 			index, err = strconv.ParseInt(name[1], 10, 64)
 		}
 	}
-	item = page.Body[lang][name[0]]
+	item = page.Data[lang][name[0]]
 	if err != nil {
 		return item[0]
 	}
 	return item[index]
 }
-func (page *Page) fullBody(lang, name string) string {		// retrieves the entire line of text elements identified by that name
+func (page *Page) readLine(lang, name string) string {		// retrieves the entire line of text elements identified by that name
 	whole := ""
-	for _, s := range page.Body[lang][name] { whole += " "+s }
+	for _, s := range page.Data[lang][name] { whole += " "+s }
 	return whole[1:]
 }
+func (page *Page) getHTML(data ...string) template.HTML { return template.HTML(page.data(data...)) }
+func (page *Page) getCSS(data ...string) template.CSS { return template.CSS(page.data(data...)) }
+func (page *Page) getScript(data ...string) template.JS { return template.JS(page.data(data...)) }
 func (page *Page) service(data ...string) template.HTML {	// calls the service by its registered name
 	return template.HTML(page.Site.Service[data[0]].Execute(activeSession, data[1:]))
 }
 func (page *Page) get(data ...string) Item {				// retireves an Item(interface{}) Object
 	return page.Site.Service[data[0]].Get(page, activeSession, data[1:])
-}
-func (page *Page) data(data ...string) template.HTML {		// retireves an HTML data element from the page's Data store
-	if page.Data[data[0]] == nil { return "" }
-	item := page.Data[data[0]]
-	index, err := strconv.ParseInt(data[1], 10, 64)
-	if err != nil {
-		return template.HTML(item[0])
-	}
-	return template.HTML(item[index])
 }
 func (page *Page) getParam(name string) string {			// returns a page's named paramater
 	if page.Param==nil || page.Param[name]=="" {
@@ -444,9 +408,9 @@ func (page *Page) getSessionParam(name string) string {		// returns a session pa
 	}
 	return activeSession.Data[name]
 }
-func (page *Page) getList(name string) []string {			// returns a pages Body list via a page's paramater name
+func (page *Page) getListByParam(name string) []string {			// returns a pages Data list via a page's paramater name
 	lang := activeSession.GetLang()
-	return page.Body[lang][page.Param[name]]
+	return page.Data[lang][page.Param[name]]
 }
 func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call to retrieve data from the server.
 	url := page.Url											// this call should be accompanied by a target on the page
