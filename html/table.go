@@ -7,9 +7,9 @@ import (
 )
 
 type HTMLTable struct {
-	table HTMLTag
-	header HTMLTag 
-	row []HTMLTag
+	table *HTMLTag
+	header *HTMLTag 
+	row []*HTMLTag
 }
 
 type TableStow struct {
@@ -25,17 +25,17 @@ func (ts *TableStow) AddTable(name string, headers, data []string) {
 		ts.Ts[name].AddRow(data[elem : elem+len(headers)])
 	}
 }
-func (t HTMLTable) AddRow(data []string) {
+func (t *HTMLTable) AddRow(data []string) {
 	newRow := NewTag("tr", t.table.GetId()+"-row-"+strconv.Itoa(len(t.row)), "", "", "")
 	t.row = append(t.row, newRow)
 	for _, td := range(data) {
 		newRow.AppendChild(NewTag("td","","","",td))
 	}
 }
-func (t HTMLTable) Render() string { return t.table.Render() }
+func (t *HTMLTable) Render() string { return t.table.Render() }
 
 func MakeTable(headers []string, class, id, style string) *HTMLTable {
-	table := HTMLTable{NewTag("table", id, class, style, ""), NewTag("head", id+"-header", "", "", ""), make([]HTMLTag,len(headers))}
+	table := HTMLTable{NewTag("table", id, class, style, ""), NewTag("head", id+"-header", "", "", ""), make([]*HTMLTag,len(headers))}
 	for idx, head := range headers {
 		table.header.AppendChild(NewTag("td", id+"-header-"+strconv.Itoa(idx), "", style, head))
 	}	
