@@ -22,28 +22,27 @@ type Site struct {
 	Name, Url	          	string
 	SiteSessionCookieName 	string
 	Tables                	*html.TableStow
-	Html					*html.HTMLStow					// generic html tag snippets
+	Html					*html.HTMLStow
 	Pages                 	*PageStow
-	html					map[string]*html.HTMLTag
 	UserSession           	map[string]*Session
 	Service               	map[string]Service
 	SiteProcessor         	map[string]postFunc
 	ParamTriggerHandle    	map[string]postFunc
-	Body                  	map[string]map[string][]string
-	Data                  	map[string][]template.HTML
+	Text                  	map[string][]string
+	Data                  	map[string]interface{}
 	Script                	map[string][]template.JS
-	Param			    	map[string]string	
-	ParamList		    	map[string][]string
+	Param			    	map[string]string
 }
 
-func CreateSite(name, url, lang string) *Site {
+func CreateSite(name, url string) *Site {
 	site := Site{Name:name, Url:url, 
 				SiteSessionCookieName:name + "-cookie",
 				Tables:&html.TableStow{nil},
 				UserSession:make(map[string]*Session),
-				Body:make(map[string]map[string][]string), 
-				Data:make(map[string][]template.HTML),
-				Script:make(map[string][]template.JS)}
+				Text:make(map[string][]string), 
+				Data:make(map[string]interface{}),
+				Script:make(map[string][]template.JS),
+				Html:&html.HTMLStow{nil}}
 	return &site
 }
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -108,11 +107,11 @@ func (site *Site) AddScript(name, script string) *Site {
 	site.Script[name] = append(site.Script[name], template.JS(script))
 	return site
 }
-func (site *Site) AddBody(lang, name, line string) *Site {
-	if site.Body[lang] == nil {
-		site.Body[lang] = make(map[string][]string)
+func (site *Site) AddBody(name, line string) *Site {
+	if site.Text == nil {
+		site.Text = make(map[string][]string)
 	}
-	site.Body[lang][name] = []string{}
+	site.Text[name] = []string{}
 	quotes := false
 	stringbuild := ""
 	items := strings.Split(line, " ")
@@ -120,14 +119,14 @@ func (site *Site) AddBody(lang, name, line string) *Site {
 		if quotes {
 			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
-				site.Body[lang][name] = append(site.Body[lang][name],stringbuild[:len(stringbuild)-1])
+				site.Text[name] = append(site.Text[name],stringbuild[:len(stringbuild)-1])
 				quotes = false
 			}
 		} else if strings.HasPrefix(item, "\"") {
 			quotes = true
 			stringbuild = item[1:]
 		} else {
-			site.Body[lang][name] = append(site.Body[lang][name],item)
+			site.Text[name] = append(site.Text[name],item)
 		}
 	}
 	return site
@@ -137,13 +136,6 @@ func (site *Site) AddParam(name, data string) *Site {
 		site.Param = make(map[string]string)
 	}
 	site.Param[name] = data
-	return site
-}
-func (site *Site) AddParamList(name string, data []string) *Site {
-	if (site.ParamList==nil) {
-		site.ParamList = make(map[string][]string)
-	}
-	site.ParamList[name] = data
 	return site
 }
 func (site *Site) AddParamTriggerHandler(name string, handle postFunc) *Site {
@@ -160,9 +152,9 @@ func (site *Site) item(lang string, name ...string) template.CSS {
 	if len(name) == 1 {
 		return template.CSS(site.fullBody(lang, name[0]))
 	} 
-	item = site.Body[lang][name[0]]
+	item = site.Text[name[0]]
 	if strings.HasPrefix(name[1],"Body:") {
-		index, err = strconv.ParseInt(site.Body[lang][strings.Split(name[1],":")[1]][0], 10, 64)
+		index, err = strconv.ParseInt(site.Text[strings.Split(name[1],":")[1]][0], 10, 64)
 	} else {
 		index, err = strconv.ParseInt(name[1], 10, 64)
 	}
@@ -179,7 +171,7 @@ func (site *Site) GetHtml(name string) template.HTML {
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""
-	for _, s := range site.Body[lang][name] { whole += " "+s }
+	for _, s := range site.Text[name] { whole += " "+s }
 	return whole[1:]
 }
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +198,7 @@ func ServeResource(w http.ResponseWriter, r *http.Request) {
 	} else if strings.HasSuffix(r.URL.Path, "css") {
 		w.Header().Add("Content-Type", "text/css")
 	} else if strings.HasSuffix(r.URL.Path, "png") {
-		w.Header().Add("Content-Type", "image/svg+xml")
+		w.Header().Add("Content-Type", "image/png+xml")
 	} else if strings.HasSuffix(r.URL.Path, "svg") {
 		w.Header().Add("Content-Type", "image/svg+xml")
 	}

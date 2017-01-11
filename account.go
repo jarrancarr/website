@@ -59,7 +59,8 @@ func (ecs *AccountService) Status() string {
 	return "good"
 }
 
-func (acs *AccountService) Execute(session *Session, data []string) string {
+func (acs *AccountService) Execute(data []string, page *Page) string {
+	session := page.ActiveSession
 	switch data[0] {
 		case "getName":
 			return session.Data["name"]

@@ -3,6 +3,7 @@ package ecommerse
 import (
 	"github.com/jarrancarr/website"
 	"net/http"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -13,27 +14,29 @@ type ECommerseService struct {
 	index   []Category
 	catalog map[string]map[string]Product
 	acs *website.AccountService
-	pages *website.PageIndex
+	pages *website.PageStow
+	site *website.Site
 }
 func CreateService(acs *website.AccountService) *ECommerseService {
-	ecs := ECommerseService{nil, nil, acs, nil}
+	ecs := ECommerseService{acs:acs}
 	return &ecs
 }
 func (ecs *ECommerseService) Status() string {
 	return "good"
 }
-func (ecs *ECommerseService) Execute(session *website.Session, data []string) string {
+func (ecs *ECommerseService) Execute(data []string, page *website.Page) string {
 	switch data[0] {
 	case "product":
-		page := ecs.pages.Pi[data[1]]
+		page := ecs.pages.Ps[data[1]]
 		product := ecs.catalog[data[2]][data[3]]
-		page.ClearData(data[2])
-		page.AddData(data[2],product.Description)
-		page.AddData(data[2],product.ImageName)
-		page.AddData(data[2],fmt.Sprintf("%.2f",float32(product.Price)/100.0))
+		page.AddData(data[2], product)
+		//page.ClearData(data[2])
+		//page.AddData(data[2],product.Description)
+		//page.AddData(data[2],product.ImageName)
+		//page.AddData(data[2],fmt.Sprintf("%.2f",float32(product.Price)/100.0))
 		return ""
 	case "cart":
-		cart := getCart(session)
+		cart := getCart(page.ActiveSession)
 		if data[1] == "count" {
 			return fmt.Sprintf("%d",len(cart.Line))
 		} else if data[1] == "isEmpty" {
@@ -87,6 +90,10 @@ func (ecs *ECommerseService) GetCategories(w http.ResponseWriter, r *http.Reques
 } 
 func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	httpData, _ :=ioutil.ReadAll(r.Body)
+	if (httpData == nil || len(httpData) == 0) {
+		return "", errors.New("No Data")
+	}
+	fmt.Println(httpData);
 	requestedCategory := strings.Split(string(httpData),"=")[1]
 	fmt.Println("requestedCategory= "+requestedCategory)
 	prods := "{"
@@ -102,15 +109,14 @@ func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request,
 	return "ok", nil
 }
 func (ecs *ECommerseService) AddPage(name string, page *website.Page) *ECommerseService {
-	if ecs.pages == nil { ecs.pages = &website.PageIndex{nil}	}
+	if ecs.pages == nil { ecs.pages = &website.PageStow{nil}	}
 	ecs.pages.AddPage(name, page)
 	return ecs
 }
 func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	cart := getCart(s)
-	lang := s.GetLang()
 	category, _ := strconv.Atoi(p.Param["category"])
-	item := ecs.catalog[p.Body[lang]["Category"][category]][r.FormValue("product")]
+	item := ecs.catalog[p.Text["Category"][category]][r.FormValue("product")]
 	cart.addOrder(&Order{&item, 1})
 	return "", nil
 }
