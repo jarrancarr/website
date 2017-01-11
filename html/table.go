@@ -26,18 +26,18 @@ func (ts *TableStow) AddTable(name string, headers, data []string) {
 	}
 }
 func (t *HTMLTable) AddRow(data []string) {
-	newRow := NewTag("tr", t.table.GetId()+"-row-"+strconv.Itoa(len(t.row)), "", "", "")
+	newRow := NewTag3("tr", t.table.GetId()+"-row-"+strconv.Itoa(len(t.row)), "", "", "")
 	t.row = append(t.row, newRow)
 	for _, td := range(data) {
-		newRow.AppendChild(NewTag("td","","","",td))
+		newRow.AppendChild(NewTag("td").Text(td))
 	}
 }
 func (t *HTMLTable) Render() string { return t.table.Render() }
 
 func MakeTable(headers []string, class, id, style string) *HTMLTable {
-	table := HTMLTable{NewTag("table", id, class, style, ""), NewTag("head", id+"-header", "", "", ""), make([]*HTMLTag,len(headers))}
+	table := HTMLTable{NewTag3("table", id, class, style, ""), NewTag3("head", id+"-header", "", "", ""), make([]*HTMLTag,len(headers))}
 	for idx, head := range headers {
-		table.header.AppendChild(NewTag("td", id+"-header-"+strconv.Itoa(idx), "", style, head))
+		table.header.AppendChild(NewTag3("td", id+"-header-"+strconv.Itoa(idx), "", style, head))
 	}	
 	return &table
 }

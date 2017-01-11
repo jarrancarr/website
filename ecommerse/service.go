@@ -93,9 +93,7 @@ func (ecs *ECommerseService) GetProducts(w http.ResponseWriter, r *http.Request,
 	if (httpData == nil || len(httpData) == 0) {
 		return "", errors.New("No Data")
 	}
-	fmt.Println(httpData);
 	requestedCategory := strings.Split(string(httpData),"=")[1]
-	fmt.Println("requestedCategory= "+requestedCategory)
 	prods := "{"
 	productList := ecs.catalog[requestedCategory]
 	for name, prod := range(productList) {

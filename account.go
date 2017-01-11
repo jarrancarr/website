@@ -65,6 +65,9 @@ func (acs *AccountService) Execute(data []string, page *Page) string {
 		case "getName":
 			return session.Data["name"]
 			break
+		case "session":
+			return session.Data[data[1]]
+			break
 		case "isLoggedIn":
 			if session == nil {
 				return "session is null"
