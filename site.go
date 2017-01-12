@@ -167,7 +167,7 @@ func (site *Site) GetHtml(name string) template.HTML {
 	if site.Html == nil || site.Html.Hs[name] == nil {
 		return ""
 	}
-	return template.HTML(site.Html.Hs[name].Render())
+	return template.HTML(site.Html.Hs[name][0].Render())
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""

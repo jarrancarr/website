@@ -49,3 +49,7 @@ func (cart *Cart) addOrder(ord *Order) {
 func (cart *Cart) Empty() {
 	cart.Line = make([]*Order, 0)
 }
+
+func (p Product) Cost() float64 {
+	return float64(p.Price)/100.0
+}

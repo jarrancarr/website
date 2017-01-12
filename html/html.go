@@ -13,47 +13,22 @@ type HTMLTag struct {
 }
 
 type HTMLStow struct {
-	Hs map[string]*HTMLTag
+	Hs map[string][]*HTMLTag
 }
 
-func (hs *HTMLStow) Add(name, tag string, data []string) *HTMLStow {
+func (hs *HTMLStow) Add(name string, tag *HTMLTag) *HTMLStow {
 	hs.prep()
-	hs.Hs[name] = NewTag(tag)
-	for _, d := range(data) {
-		if strings.Contains(d,":::") { 
-			hs.Hs[name].Attr(d[:strings.Index(d,":::")], d[strings.Index(d,":::")+3:])
-		} else {
-			hs.Hs[name].AppendText(d)
-		}
-	}
+	hs.Hs[name] = append(hs.Hs[name],tag)
 	return hs
 }
 
-func (hs *HTMLStow) AddTo(name, tag string, data []string) *HTMLStow {
-	if hs.Hs == nil || hs.Hs[name] == nil {
-		return hs
-	}
-	child := NewTag(tag)
-	for _, d := range(data) {
-		if strings.Contains(d,":::") { 
-			child.Attr(d[:strings.Index(d,":::")], d[strings.Index(d,":::")+3:])
-		} else {
-			child.AppendText(d)
-		}
-	}
-	hs.Hs[name].AppendChild(child)
-	return hs
-}
-
-func (hs *HTMLStow) Tag(name string, tag *HTMLTag) *HTMLStow {
-	hs.prep()
-	hs.Hs[name] = tag
-	return hs
+func (hs *HTMLStow) Get(name string) []*HTMLTag {
+	return hs.Hs[name]
 }
 
 func (hs *HTMLStow) prep() {
 	if hs.Hs == nil {
-		hs.Hs = make(map[string]*HTMLTag)
+		hs.Hs = make(map[string][]*HTMLTag)
 	}
 }
 
@@ -163,7 +138,7 @@ func NewTag(html string) *HTMLTag {
 	var key, value []string
 	token := strings.Split(html, " ")
 	for _,t := range token[1:] {
-		attr := strings.Split(t,"=")
+		attr := strings.Split(t,"==")
 		if len(attr) == 1 {
 			text = attr[0]
 		} else {
@@ -189,5 +164,5 @@ func NewTag(html string) *HTMLTag {
 	return htmlTag
 }
 func MakeStow() *HTMLStow {
-	return &HTMLStow{make(map[string]*HTMLTag)}
+	return &HTMLStow{make(map[string][]*HTMLTag)}
 }
