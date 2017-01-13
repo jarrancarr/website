@@ -44,7 +44,7 @@ var pageLock = &sync.Mutex{}
 func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	var text map[string][]string
 	if title != "" {
-		filename := title + ".txt"
+		filename := DataDir + "/" + title + ".txt"
 		data, err := os.Open(filename)
 		if err != nil {
 			return nil, err
@@ -88,6 +88,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		template.FuncMap{
 			"table":   		page.table,
 			"css":    		page.css,
+			"script":		page.Site.GetScript,
 			"service": 		page.service,
 			"get": 	   		page.get,
 			"page":    		page.page,
@@ -144,20 +145,18 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	paramMap := r.URL.Query() 
-	fmt.Println(paramMap)
 	for key, _ := range paramMap {
 		page.Param[key] = paramMap.Get(key)
 	}
 	for key, _ := range paramMap {
 		if page.paramTriggerHandle[key] != nil {
-			page.paramTriggerHandle[key](w, r, page.Site.GetCurrentSession(w, r), page)
+			page.paramTriggerHandle[key](w, r, page.ActiveSession, page)
 		}
 		if page.Site.ParamTriggerHandle[key] != nil {
-			page.Site.ParamTriggerHandle[key](w, r, page.Site.GetCurrentSession(w, r), page)
+			page.Site.ParamTriggerHandle[key](w, r, page.ActiveSession, page)
 		}
 	}
 	if r.Method == "POST" {
-		fmt.Println("POST")
 		if page.postHandle[r.FormValue("postProcessingHandler")]==nil {
 		} else {
 			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
@@ -276,23 +275,24 @@ func (page *Page) page(name ...string) template.HTML {
 		if page.Site.Pages == nil || page.Site.Pages.Ps == nil || page.Site.Pages.Ps[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
 		} else {
-			for i, d := range(name) {
+			for i, d := range(name) { // add any context parameters
 				if i<1 { continue }
 				pair := strings.Split(d,">>")
 				page.Site.Pages.Ps[name[0]].AddParam(pair[0],pair[1])
 			}
+			page.Site.Pages.Ps[name[0]].ActiveSession = page.ActiveSession
 			return template.HTML(page.Site.Pages.Ps[name[0]].Render())
 		}
 	}
-	for i, d := range(name) {
+	for i, d := range(name) { // add any context parameters
 		if i<1 { continue }
 		pair := strings.Split(d,">>")
 		page.pages.Ps[name[0]].AddParam(pair[0],pair[1])
 	}
+	page.pages.Ps[name[0]].ActiveSession = page.ActiveSession
 	return template.HTML(page.pages.Ps[name[0]].Render())
 }
 func (page *Page) debug(name ...string) template.HTML {
-	fmt.Println("debug")
 	all := "<br/><div class='debug'><p><code>page: "+page.Title
 	all += "<br/>&nbsp&nbspUrl: "+page.Url
 	all += "<br/>&nbsp&nbspData: "
@@ -313,6 +313,7 @@ func (page *Page) debug(name ...string) template.HTML {
 }
 
 func (page *Page) getHtml(name string) template.HTML {
+	fmt.Println("getHtml on page: "+page.Title)
 	if page.Html == nil {
 		if page.Parent == nil {
 			return page.Site.GetHtml(name)
@@ -385,7 +386,7 @@ func (page *Page) getParam(name string) string {			// returns a page's named par
 }
 func (page *Page) getSessionParam(name string) string {		// returns a session paramater
 	if page.ActiveSession == nil {
-		return ""
+		return "no session"
 	}
 	if name=="language" {
 		return page.ActiveSession.GetLang()

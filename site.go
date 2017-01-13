@@ -17,6 +17,7 @@ import (
 )
 
 var ResourceDir = "../../"
+var DataDir = "."
 
 type Site struct {
 	Name, Url	          	string
@@ -168,6 +169,12 @@ func (site *Site) GetHtml(name string) template.HTML {
 		return ""
 	}
 	return template.HTML(site.Html.Hs[name][0].Render())
+}
+func (site *Site) GetScript(param ...string) []template.JS {
+	if site.Script == nil {
+		return nil
+	}
+	return site.Script[param[0]]
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""

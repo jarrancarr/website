@@ -43,7 +43,17 @@ func (cart *Cart) addOrder(ord *Order) {
 	if cart.Line == nil {
 		cart.Line = make([]*Order, 0)
 	}
-	cart.Line = append(cart.Line, ord)
+	newItem := true
+	for _, i := range(cart.Line) {
+		if i.Item.Name == ord.Item.Name {
+			i.Quantity = i.Quantity + 1
+			newItem = false
+			break
+		}
+	}
+	if newItem {
+		cart.Line = append(cart.Line, ord)
+	}
 }
 
 func (cart *Cart) Empty() {

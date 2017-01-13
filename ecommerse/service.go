@@ -33,11 +33,15 @@ func (ecs *ECommerseService) Execute(data []string, page *website.Page) string {
 		return ""
 	case "cart":
 		if page == nil || page.ActiveSession == nil {
-			return "false"
+			return "no session"
 		}
 		cart := getCart(page.ActiveSession)
 		if data[1] == "count" {
-			return fmt.Sprintf("%d",len(cart.Line))
+			count := 0
+			for _, line := range(cart.Line) {
+				count = count + line.Quantity
+			}
+			return fmt.Sprintf("%d",count)
 		} else if data[1] == "isEmpty" {
 			if len(cart.Line) == 0 {
 				return "true"
@@ -111,7 +115,6 @@ func (ecs *ECommerseService) AddPage(name string, page *website.Page) *ECommerse
 	return ecs
 }
 func (ecs *ECommerseService) AddToCart(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	fmt.Println("Add to cart!!!"+r.FormValue("product"))
 	cart := getCart(s)
 	category, _ := strconv.Atoi(p.Param["category"])
 	item := ecs.catalog[p.Text["Category"][category]][r.FormValue("product")]
