@@ -3,36 +3,36 @@ package website
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 	"sync"
-	"fmt"
 
 	"github.com/jarrancarr/website/html"
 )
 
 type Page struct {
 	Title, Url          string
-	Text				map[string][]string
+	Text                map[string][]string
 	Data                map[string]interface{}
-	Param			    map[string]string
-	Html				*html.HTMLStow					// generic html tag snippets
-	Site                *Site							// reference to site
-	Parent				*Page							// parent page
-	pages               *PageStow						// sub pages
-	tables              *html.TableStow					// tables
-	paramTriggerHandle  map[string]postFunc				// functions executed with URL parameters
-	postHandle          map[string]postFunc				// functions executed from a post request
-	ajaxHandle          map[string]postFunc				// functions that respond to AJAX requests
-	tmpl                *template.Template				// this pages HTML template
-	initProcessor       []postFunc 						// initial processors before site processors
-	preProcessor        []postFunc 						// processors after site processors
-	postProcessor       []postFunc 						// processors after page
-	bypassSiteProcessor map[string]bool					// any site processor to not precess for this page
-	ActiveSession		*Session
+	Param               map[string]string
+	Html                *html.HTMLStow      // generic html tag snippets
+	Site                *Site               // reference to site
+	Parent              *Page               // parent page
+	pages               *PageStow           // sub pages
+	tables              *html.TableStow     // tables
+	paramTriggerHandle  map[string]postFunc // functions executed with URL parameters
+	postHandle          map[string]postFunc // functions executed from a post request
+	ajaxHandle          map[string]postFunc // functions that respond to AJAX requests
+	tmpl                *template.Template  // this pages HTML template
+	initProcessor       []postFunc          // initial processors before site processors
+	preProcessor        []postFunc          // processors after site processors
+	postProcessor       []postFunc          // processors after page
+	bypassSiteProcessor map[string]bool     // any site processor to not precess for this page
+	ActiveSession       *Session
 }
 
 type PageStow struct {
@@ -60,21 +60,21 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 					break
 				} else {
 					field := strings.Split(string(s), ">>")
-					items := strings.Split(field[1]," ")
+					items := strings.Split(field[1], " ")
 					quotes := false
 					stringbuild := ""
 					for _, item := range items {
 						if quotes {
 							stringbuild += " " + item
 							if strings.HasSuffix(item, "\"") {
-								text[field[0]] = append(text[field[0]],stringbuild[:len(stringbuild)-1])
+								text[field[0]] = append(text[field[0]], stringbuild[:len(stringbuild)-1])
 								quotes = false
 							}
 						} else if strings.HasPrefix(item, "\"") {
 							quotes = true
 							stringbuild = item[1:]
 						} else {
-							text[field[0]] = append(text[field[0]],item)
+							text[field[0]] = append(text[field[0]], item)
 						}
 					}
 				}
@@ -83,26 +83,26 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{	Title:title, Text:text, Site:site, Param:make(map[string]string), Html:&html.HTMLStow{nil}}
+	page := &Page{Title: title, Text: text, Site: site, Param: make(map[string]string), Html: &html.HTMLStow{nil}}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
-			"table":   		page.table,
-			"css":    		page.css,
-			"script":		page.Site.GetScript,
-			"service": 		page.service,
-			"get": 	   		page.get,
-			"page":    		page.page,
-			"debug":   		page.debug,
-			"html":    		page.getHtml,
-			"htmls":    	page.getHtmls,
-			"text":    		page.text,
-			"list":    		page.list,
-			"line":    		page.line,
-			"data":    		page.data,
-			"param":   		page.getParam,
-			"session": 		page.getSessionParam,
-			"ajax":    		page.ajax,
-			"target":  		page.target}).
+			"table":   page.table,
+			"css":     page.css,
+			"script":  page.Site.GetScript,
+			"service": page.service,
+			"get":     page.get,
+			"page":    page.page,
+			"debug":   page.debug,
+			"html":    page.getHtml,
+			"htmls":   page.getHtmls,
+			"text":    page.text,
+			"list":    page.list,
+			"line":    page.line,
+			"data":    page.data,
+			"param":   page.getParam,
+			"session": page.getSessionParam,
+			"ajax":    page.ajax,
+			"target":  page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -144,7 +144,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	paramMap := r.URL.Query() 
+	paramMap := r.URL.Query()
 	for key, _ := range paramMap {
 		page.Param[key] = paramMap.Get(key)
 	}
@@ -157,7 +157,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.Method == "POST" {
-		if page.postHandle[r.FormValue("postProcessingHandler")]==nil {
+		if page.postHandle[r.FormValue("postProcessingHandler")] == nil {
 		} else {
 			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
 			if redirect != "" {
@@ -196,7 +196,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	page.Site.GetCurrentSession(w, r).Data["navigation"]=r.RequestURI
+	page.Site.GetCurrentSession(w, r).Data["navigation"] = r.RequestURI
 	pageLock.Unlock()
 }
 func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable {
@@ -215,14 +215,14 @@ func (page *Page) AddPage(name string, data *Page) *Page {
 	return page
 }
 func (page *Page) AddParam(name, data string) *Page {
-	if (page.Param==nil) {
+	if page.Param == nil {
 		page.Param = make(map[string]string)
 	}
 	page.Param[name] = data
 	return page
 }
 func (page *Page) AddData(name string, data interface{}) *Page {
-	if (page.Data==nil) {
+	if page.Data == nil {
 		page.Data = make(map[string]interface{})
 	}
 	page.Data[name] = data
@@ -259,7 +259,7 @@ func (page *Page) AddPostProcessor(initFunc postFunc) {
 	page.postProcessor = append(page.postProcessor, initFunc)
 }
 func (page *Page) AddBypassSiteProcessor(name string) {
-	if 	page.bypassSiteProcessor ==nil {
+	if page.bypassSiteProcessor == nil {
 		page.bypassSiteProcessor = make(map[string]bool)
 	}
 	page.bypassSiteProcessor[name] = true
@@ -275,82 +275,107 @@ func (page *Page) page(name ...string) template.HTML {
 		if page.Site.Pages == nil || page.Site.Pages.Ps == nil || page.Site.Pages.Ps[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
 		} else {
-			for i, d := range(name) { // add any context parameters
-				if i<1 { continue }
-				pair := strings.Split(d,">>")
-				page.Site.Pages.Ps[name[0]].AddParam(pair[0],pair[1])
+			for i, d := range name { // add any context parameters
+				if i < 1 {
+					continue
+				}
+				pair := strings.Split(d, ">>")
+				page.Site.Pages.Ps[name[0]].AddParam(pair[0], pair[1])
 			}
 			page.Site.Pages.Ps[name[0]].ActiveSession = page.ActiveSession
 			return template.HTML(page.Site.Pages.Ps[name[0]].Render())
 		}
 	}
-	for i, d := range(name) { // add any context parameters
-		if i<1 { continue }
-		pair := strings.Split(d,">>")
-		page.pages.Ps[name[0]].AddParam(pair[0],pair[1])
+	for i, d := range name { // add any context parameters
+		if i < 1 {
+			continue
+		}
+		pair := strings.Split(d, ">>")
+		page.pages.Ps[name[0]].AddParam(pair[0], pair[1])
 	}
 	page.pages.Ps[name[0]].ActiveSession = page.ActiveSession
 	return template.HTML(page.pages.Ps[name[0]].Render())
 }
 func (page *Page) debug(name ...string) template.HTML {
-	all := "<br/><div class='debug'><p><code>page: "+page.Title
-	all += "<br/>&nbsp&nbspUrl: "+page.Url
+	all := "<br/><div class='debug'><p><code>page: " + page.Title
+	all += "<br/>&nbsp&nbspUrl: " + page.Url
 	all += "<br/>&nbsp&nbspData: "
 	all += "<br/>&nbsp&nbspparam: "
-	for key,val := range page.Param {
-		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key+": "+val
+	for key, val := range page.Param {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp" + key + ": " + val
 	}
 	all += "<br/>&nbsp&nbsppostHandle: "
-	for key,_ := range page.postHandle {
-		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key
+	for key, _ := range page.postHandle {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp" + key
 	}
 	all += "<br/>&nbsp&nbspajaxHandle: "
-	for key,_ := range page.ajaxHandle {
-		all += "<br/>&nbsp&nbsp&nbsp&nbsp"+key
+	for key, _ := range page.ajaxHandle {
+		all += "<br/>&nbsp&nbsp&nbsp&nbsp" + key
 	}
 	all += "</code></p></div>"
 	return template.HTML(all)
 }
 
-func (page *Page) getHtml(name string) template.HTML {
-	fmt.Println("getHtml on page: "+page.Title)
+func (page *Page) getHtml(name ...string) template.HTML {
+	page.params(name[1:]...)
 	if page.Html == nil {
 		if page.Parent == nil {
-			return page.Site.GetHtml(name)
+			return page.Site.GetHtml(name[0])
 		}
-		return page.Parent.getHtml(name)
+		return page.Parent.getHtml(name...)
 	}
-	return template.HTML(page.Html.Hs[name][0].Render())
+	output := page.jsp(page.Html.Hs[name[0]][0].Render())
+	return template.HTML(output)
 }
-func (page *Page) getHtmls(name string) []template.HTML {
+func (page *Page) getHtmls(name ...string) []template.HTML {
+	page.params(name[1:]...)
 	var list []template.HTML
 	if page.Html == nil {
-		return page.Parent.getHtmls(name)
+		return page.Parent.getHtmls(name...)
 	}
-	for _,ht := range(page.Html.Hs[name]) {
-		list = append(list, template.HTML(ht.Render()))
+	for index, ht := range page.Html.Hs[name[0]] {
+		page.Param["iterator"] = fmt.Sprintf("%d", index)
+		list = append(list, template.HTML(page.jsp(ht.Render())))
 	}
 	return list
 }
-func (page *Page) css(name ...string) template.CSS {		// item pulls a string from the parameter text file by name and optionally a 
-	return template.CSS(page.text(name...))					// number indicating which index of that string to pull
+func (page *Page) css(name ...string) template.CSS { // item pulls a string from the parameter text file by name and optionally a
+	return template.CSS(page.text(name...)) // number indicating which index of that string to pull
+}
+func (page *Page) jsp(input string) string {
+	if start := strings.Index(input, "${"); start >= 0 {
+		end := strings.Index(input[start:], "}")
+		return page.jsp(input[:start] + page.Param[input[start+2:start+end]] + input[start+end+1:])
+	}
+	return input
 }
 func (page *Page) data(data string) interface{} {
 	return page.Data[data]
 }
-func (page *Page) text(name ...string) string {				// retrieves a data element as a string
-	if page.Text[name[0]] == nil {					// 'param:temp' will populate the index parameter from the Param list
-		return ""											// 'language:xx' will get the paramater for language xx
+func (page *Page) params(data ...string) {
+	for _, d := range data { // add any context parameters
+		pair := strings.Split(d, ">>")
+		if len(pair) == 2 {
+			page.AddParam(pair[0], pair[1])
+		}
+		if len(pair) == 3 {
+			page.pages.Ps[pair[0]].AddParam(pair[1], pair[2])
+		}
+	}
+}
+func (page *Page) text(name ...string) string { // retrieves a data element as a string
+	if page.Text[name[0]] == nil { // 'param:temp' will populate the index parameter from the Param list
+		return "" // 'language:xx' will get the paramater for language xx
 	}
 	var item []string
 	index := int64(-1)
 	var err error
 	if len(name) == 1 {
 		return page.line(name[0])
-	} 
-	for _, asdf := range(name[1:]) {
-		if strings.HasPrefix(asdf,"param:") {
-			param := strings.Split(asdf,":")
+	}
+	for _, asdf := range name[1:] {
+		if strings.HasPrefix(asdf, "param:") {
+			param := strings.Split(asdf, ":")
 			index, err = strconv.ParseInt(page.Param[param[1]], 10, 64)
 		} else {
 			index, err = strconv.ParseInt(name[1], 10, 64)
@@ -365,40 +390,42 @@ func (page *Page) text(name ...string) string {				// retrieves a data element a
 func (page *Page) list(name string) []string {
 	return page.Text[name]
 }
-func (page *Page) line(name string) string {		// retrieves the entire line of text elements identified by that name
+func (page *Page) line(name string) string { // retrieves the entire line of text elements identified by that name
 	whole := ""
-	for _, s := range page.Text[name] { whole += " "+s }
+	for _, s := range page.Text[name] {
+		whole += " " + s
+	}
 	return whole[1:]
 }
-func (page *Page) getCSS(data ...string) template.CSS { return template.CSS(page.text(data...)) }
-func (page *Page) getScript(data ...string) template.JS { return template.JS(page.text(data...)) }
-func (page *Page) service(data ...string) template.HTML {	// calls the service by its registered name
+func (page *Page) getCSS(data ...string) template.CSS     { return template.CSS(page.text(data...)) }
+func (page *Page) getScript(data ...string) template.JS   { return template.JS(page.text(data...)) }
+func (page *Page) service(data ...string) template.HTML { // calls the service by its registered name
 	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page))
 }
-func (page *Page) get(data ...string) Item {				// retireves an Item(interface{}) Object
+func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) Object
 	return page.Site.Service[data[0]].Get(page, page.ActiveSession, data[1:])
 }
-func (page *Page) getParam(name string) string {			// returns a page's named paramater
-	if page.Param==nil || page.Param[name]=="" {
+func (page *Page) getParam(name string) string { // returns a page's named paramater
+	if page.Param == nil || page.Param[name] == "" {
 		return name
 	}
 	return page.Param[name]
 }
-func (page *Page) getSessionParam(name string) string {		// returns a session paramater
+func (page *Page) getSessionParam(name string) string { // returns a session paramater
 	if page.ActiveSession == nil {
 		return "no session"
 	}
-	if name=="language" {
+	if name == "language" {
 		return page.ActiveSession.GetLang()
 	}
 	return page.ActiveSession.Data[name]
 }
-func (page *Page) getTextByParam(name string) []string {			// returns a pages Data list via a page's paramater name
+func (page *Page) getTextByParam(name string) []string { // returns a pages Data list via a page's paramater name
 	return page.Text[page.Param[name]]
 }
-func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call to retrieve data from the server.
-	url := page.Url											// this call should be accompanied by a target on the page
-	handler := ""											// and the AJAX Handler function
+func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call to retrieve data from the server.
+	url := page.Url // this call should be accompanied by a target on the page
+	handler := ""   // and the AJAX Handler function
 	trigger := ""
 	target := ""
 	onClick := ""
@@ -408,42 +435,64 @@ func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call 
 	success := ""
 	setup := ""
 	post := ""
-	for _, d := range(data) {
-		if strings.HasPrefix(d, "url:") { url = page.getParam(d[4:]) }
-		if strings.HasPrefix(d, "handler:") { handler = d[8:] }
-		if strings.HasPrefix(d, "target:") { target = d[7:] }
-		if strings.HasPrefix(d, "trigger:") { trigger = d[8:] }
-		if strings.HasPrefix(d, "data:") { jsData = page.getParam(d[5:]) }
-		if strings.HasPrefix(d, "item:") { item = d[5:] }
-		if strings.HasPrefix(d, "onclick:") { onClick = page.getParam(d[8:]) }
-		if strings.HasPrefix(d, "var:") { variables += "var " + d[4:] + "; " }
-		if strings.HasPrefix(d, "success:") { success = page.getParam(d[8:]) }
-		if strings.HasPrefix(d, "setup:") { setup = "\n"+page.getParam(d[6:]) }
-		if strings.HasPrefix(d, "post:") { post = "\n"+page.getParam(d[5:]) }
+	for _, d := range data {
+		if strings.HasPrefix(d, "url:") {
+			url = page.getParam(d[4:])
+		}
+		if strings.HasPrefix(d, "handler:") {
+			handler = d[8:]
+		}
+		if strings.HasPrefix(d, "target:") {
+			target = d[7:]
+		}
+		if strings.HasPrefix(d, "trigger:") {
+			trigger = d[8:]
+		}
+		if strings.HasPrefix(d, "data:") {
+			jsData = page.getParam(d[5:])
+		}
+		if strings.HasPrefix(d, "item:") {
+			item = d[5:]
+		}
+		if strings.HasPrefix(d, "onclick:") {
+			onClick = page.getParam(d[8:])
+		}
+		if strings.HasPrefix(d, "var:") {
+			variables += "var " + d[4:] + "; "
+		}
+		if strings.HasPrefix(d, "success:") {
+			success = page.getParam(d[8:])
+		}
+		if strings.HasPrefix(d, "setup:") {
+			setup = "\n" + page.getParam(d[6:])
+		}
+		if strings.HasPrefix(d, "post:") {
+			post = "\n" + page.getParam(d[5:])
+		}
 	}
 	if success == "" {
 		success = `var ul = $( "<ul/>", {"class": "my-new-list"});
-			var obj = JSON.parse(data);	$("#`+target+`").empty(); $("#`+target+`").append(ul);
-			$.each(obj, function(i,val) { item =`+item+`; `+onClick+` ul.append( item ); });`
+			var obj = JSON.parse(data);	$("#` + target + `").empty(); $("#` + target + `").append(ul);
+			$.each(obj, function(i,val) { item =` + item + `; ` + onClick + ` ul.append( item ); });`
 	}
-	return template.HTML(`<script>`+variables+`
+	return template.HTML(`<script>` + variables + `
 		$(function() {
-			$('#`+trigger+`-trigger').on('click', function() {`+
-				setup+`
+			$('#` + trigger + `-trigger').on('click', function() {` +
+		setup + `
 				$.ajax({
-					url: '/`+url+`',
+					url: '/` + url + `',
 					type: 'AJAX',
-					headers: { 'ajaxProcessingHandler':'`+handler+`' },
+					headers: { 'ajaxProcessingHandler':'` + handler + `' },
 					dataType: 'html',
-					data: { `+jsData+` },
+					data: { ` + jsData + ` },
 					success: function(data, textStatus, jqXHR) {
-						`+success+`	
+						` + success + `	
 					},
 					error: function(data, textStatus, jqXHR) {
 						console.log("button fail!");
 					}
-				});`+
-				post+`
+				});` +
+		post + `
 			});
 		});
 	</script>`)
@@ -451,7 +500,7 @@ func (page *Page) ajax(data ...string) template.HTML {		// sets up an ajax call 
 
 //sets up a div target for the ajax call
 func (page *Page) target(name string) template.HTML {
-	return template.HTML("<div id='"+name+"'></div>")
+	return template.HTML("<div id='" + name + "'></div>")
 }
 func (page *Page) Render() template.HTML {
 	buf := new(bytes.Buffer)

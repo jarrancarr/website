@@ -6,10 +6,10 @@ import (
 )
 
 type HTMLTag struct {
-	tag, text string
-	attributes map[string]string
+	tag, text     string
+	attributes    map[string]string
 	attributeList map[string][]string
-	child []*HTMLTag
+	child         []*HTMLTag
 }
 
 type HTMLStow struct {
@@ -18,7 +18,7 @@ type HTMLStow struct {
 
 func (hs *HTMLStow) Add(name string, tag *HTMLTag) *HTMLStow {
 	hs.prep()
-	hs.Hs[name] = append(hs.Hs[name],tag)
+	hs.Hs[name] = append(hs.Hs[name], tag)
 	return hs
 }
 
@@ -43,12 +43,12 @@ func (elem *HTMLTag) Attr(name, value string) *HTMLTag {
 			if elem.attributeList == nil {
 				elem.attributeList = make(map[string][]string)
 			}
-			elem.attributeList[name] = append(elem.attributeList[name],elem.attributes[name])
-			elem.attributeList[name] = append(elem.attributeList[name],value)
+			elem.attributeList[name] = append(elem.attributeList[name], elem.attributes[name])
+			elem.attributeList[name] = append(elem.attributeList[name], value)
 			elem.attributes[name] = ""
 		}
 	} else {
-		elem.attributeList[name] = append(elem.attributeList[name],value)
+		elem.attributeList[name] = append(elem.attributeList[name], value)
 	}
 	return elem
 }
@@ -84,32 +84,36 @@ func (elem *HTMLTag) AppendText(text string) *HTMLTag {
 	return elem
 }
 func (elem *HTMLTag) AppendChild(tag *HTMLTag) *HTMLTag {
-	if (elem.child == nil) {
-		elem.child = make([]*HTMLTag,10)
+	if elem.child == nil {
+		elem.child = make([]*HTMLTag, 10)
 	}
 	elem.child = append(elem.child, tag)
 	return elem
 }
 func (elem HTMLTag) String() string {
-	return elem.Render();
+	return elem.Render()
 }
 func (elem HTMLTag) Render() string {
-	element := "<" + elem.tag	
-	for k,v := range(elem.attributes) {
-		element += " "+k+"=\"" + v + "\""
-	}	
-	for k,v := range(elem.attributeList) {
-		element += " "+k+"=\""
-		for _,l := range(v) {
-			element += l + " "
+	element := "<" + elem.tag
+	for k, v := range elem.attributes {
+		if v != "" {
+			element += " " + k + "=\"" + v + "\""
 		}
-		element += "\""
+	}
+	for k, v := range elem.attributeList {
+		if len(v) > 0 {
+			element += " " + k + "=\""
+			for _, l := range v {
+				element += l + " "
+			}
+			element += "\""
+		}
 	}
 	if elem.child == nil && elem.text == "" {
 		return element + "/>"
 	}
 	element += ">"
-	for _,c := range(elem.child) {
+	for _, c := range elem.child {
 		if c != nil {
 			element += c.Render()
 		}
@@ -119,14 +123,14 @@ func (elem HTMLTag) Render() string {
 
 func NewTag3(tag, id, class, style, text string) *HTMLTag {
 	t := &HTMLTag{tag, text, nil, nil, nil}
-	t.Attr("id", id).Class(class).Attr("style",style)
+	t.Attr("id", id).Class(class).Attr("style", style)
 	return t
 }
 func NewTag2(tag, text string, attr []string) *HTMLTag {
 	htmlTag := NewTag(tag).Text(text)
-	for _, d := range(attr) {
-		if strings.Contains(d,":::") { 
-			htmlTag.Attr(d[:strings.Index(d,":::")], d[strings.Index(d,":::")+3:])
+	for _, d := range attr {
+		if strings.Contains(d, ":::") {
+			htmlTag.Attr(d[:strings.Index(d, ":::")], d[strings.Index(d, ":::")+3:])
 		} else {
 			htmlTag.AppendText(d)
 		}
@@ -137,28 +141,31 @@ func NewTag(html string) *HTMLTag {
 	var id, class, style, text string
 	var key, value []string
 	token := strings.Split(html, " ")
-	for _,t := range token[1:] {
-		attr := strings.Split(t,"==")
+	for _, t := range token[1:] {
+		attr := strings.Split(t, "==")
 		if len(attr) == 1 {
 			text = attr[0]
 		} else {
-			switch(attr[0]) {
-				case "id": id = attr[1] 
-					break
-				case "class": class = attr[1] 
-					break
-				case "style": style = attr[1] 
-					break
-				default: 
-					key = append(key, attr[0])
-					value = append(value, attr[1])
-					break
+			switch attr[0] {
+			case "id":
+				id = attr[1]
+				break
+			case "class":
+				class = attr[1]
+				break
+			case "style":
+				style = attr[1]
+				break
+			default:
+				key = append(key, attr[0])
+				value = append(value, attr[1])
+				break
 			}
 		}
 	}
-	
-	htmlTag := NewTag3(token[0], id, class, style, text);
-	for index, k := range(key) {
+
+	htmlTag := NewTag3(token[0], id, class, style, text)
+	for index, k := range key {
 		htmlTag.Attr(k, value[index])
 	}
 	return htmlTag
