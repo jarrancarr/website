@@ -72,7 +72,9 @@ func (elem *HTMLTag) Class(value string) *HTMLTag {
 	if elem.attributeList == nil {
 		elem.attributeList = make(map[string][]string)
 	}
-	elem.attributeList["class"] = append(elem.attributeList["class"], value)
+	if value != "" {
+		elem.attributeList["class"] = append(elem.attributeList["class"], value)
+	}
 	return elem
 }
 func (elem *HTMLTag) Text(text string) *HTMLTag {

@@ -39,7 +39,9 @@ type PageStow struct {
 	Ps map[string]*Page
 }
 
-var pageLock = &sync.Mutex{}
+var (
+	pageLock = &sync.Mutex{}
+)
 
 func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	var text map[string][]string
@@ -316,76 +318,126 @@ func (page *Page) debug(name ...string) template.HTML {
 	return template.HTML(all)
 }
 
-func (page *Page) getHtml(name ...string) template.HTML {
-	page.params(name[1:]...)
+func (page *Page) getHtml(name ...string) []template.HTML {
+	logger.Debug.Println("getHtml('"+strings.Join(name,"', '")+"')")
+	length := page.params(name[1:]...)
+	logger.Debug.Printf("length = %d",length)
 	if page.Html == nil {
 		if page.Parent == nil {
-			return page.Site.GetHtml(name[0])
+			return nil
 		}
 		return page.Parent.getHtml(name...)
 	}
-	output := page.jsp(page.Html.Hs[name[0]][0].Render())
-	return template.HTML(output)
+	var list []template.HTML
+	if length > 0 {
+		for i := 0 ; i<length ; i++ {
+			page.Param["ITERATOR"] = fmt.Sprintf("%d", i)
+			list = append(list, template.HTML(page.jsp(page.Html.Hs[name[0]][0].Render(), i)))
+		}
+		return list
+	} else {
+		return []template.HTML{template.HTML(page.jsp(page.Html.Hs[name[0]][-length].Render(), -1))}
+	}
 }
 func (page *Page) getHtmls(name ...string) []template.HTML {
-	page.params(name[1:]...)
-	var list []template.HTML
+	logger.Trace.Println("getHtmls("+strings.Join(name,",")+")")
+	length := page.params(name[1:]...)
 	if page.Html == nil {
+		logger.Debug.Println("page.Html is nil... checking parent")
 		return page.Parent.getHtmls(name...)
 	}
-	for index, ht := range page.Html.Hs[name[0]] {
-		page.Param["iterator"] = fmt.Sprintf("%d", index)
-		list = append(list, template.HTML(page.jsp(ht.Render())))
+	var list []template.HTML
+	for i := 0 ; i<length ; i++ {
+		for _, ht := range page.Html.Hs[name[0]] {
+			page.Param["ITERATOR"] = page.Param["ITERATOR"] + " " + fmt.Sprintf("%d", i)
+			list = append(list, template.HTML(page.jsp(ht.Render(), i)))
+		}
 	}
 	return list
 }
 func (page *Page) css(name ...string) template.CSS { // item pulls a string from the parameter text file by name and optionally a
+	logger.Trace.Println("css("+strings.Join(name,",")+")")
 	return template.CSS(page.text(name...)) // number indicating which index of that string to pull
 }
-func (page *Page) jsp(input string) string {
+func (page *Page) jsp(input string, index int) string {
+	logger.Trace.Printf("jsp('%s',%d)",input,index)
 	if start := strings.Index(input, "${"); start >= 0 {
 		end := strings.Index(input[start:], "}")
-		return page.jsp(input[:start] + page.Param[input[start+2:start+end]] + input[start+end+1:])
+		if index == -1 {
+			return page.jsp(input[:start] + page.Param[input[start+2:start+end]] + input[start+end+1:], index)
+		} else {
+			logger.Trace.Println("jsp:mark-- "+input[start+2:start+end]+": "+page.Param[input[start+2:start+end]])
+			return page.jsp(input[:start] + strings.Split(page.Param[input[start+2:start+end]]," ")[index] + input[start+end+1:], index)
+		}
 	}
 	return input
 }
 func (page *Page) data(data string) interface{} {
 	return page.Data[data]
 }
-func (page *Page) params(data ...string) {
-	for _, d := range data { // add any context parameters
-		pair := strings.Split(d, ">>")
+func (page *Page) params(data ...string) int { // add any context parameters: returns the count of the minimum array size
+	logger.Trace.Println("params("+strings.Join(data,",")+")")
+	if len(data) == 0 { return 1 }
+	minimum := 999;
+	for _, d := range data { 
+		pair := strings.SplitN(d, ">>",4)
+		if len(pair) == 1 {
+			num, err := strconv.ParseInt(data[1], 10, 64)
+			if err == nil {
+				return int(-num)
+			}
+		}
 		if len(pair) == 2 {
-			page.AddParam(pair[0], pair[1])
+			words := strings.SplitN(pair[1],",",-1)
+			if len(words) < minimum { 
+				minimum = len(words) 
+			}
+			page.AddParam(pair[0], strings.Join(words," "))
 		}
 		if len(pair) == 3 {
-			page.pages.Ps[pair[0]].AddParam(pair[1], pair[2])
+			words := strings.SplitN(pair[2],",",-1)
+			if len(words) < minimum {
+				minimum = len(words) 
+			}
+			page.pages.Ps[pair[0]].AddParam(pair[1], strings.Join(words," "))
 		}
 	}
+	return minimum
 }
 func (page *Page) text(name ...string) string { // retrieves a data element as a string
+	logger.Trace.Println("params("+strings.Join(name,",")+")")
 	if page.Text[name[0]] == nil { // 'param:temp' will populate the index parameter from the Param list
 		return "" // 'language:xx' will get the paramater for language xx
 	}
-	var item []string
-	index := int64(-1)
-	var err error
 	if len(name) == 1 {
 		return page.line(name[0])
 	}
-	for _, asdf := range name[1:] {
-		if strings.HasPrefix(asdf, "param:") {
-			param := strings.Split(asdf, ":")
-			index, err = strconv.ParseInt(page.Param[param[1]], 10, 64)
-		} else {
-			index, err = strconv.ParseInt(name[1], 10, 64)
-		}
-	}
+	var item []string
+	index := page.parse(name[1:]...)
 	item = page.Text[name[0]]
-	if err != nil {
+	if len(index) == 0 {
 		return item[0]
 	}
-	return item[index]
+	return item[index[0]]
+}
+func (page *Page) parse(data ...string) []int64 {
+	logger.Trace.Println("params("+strings.Join(data,",")+")")
+	var answ []int64	
+	for _, asdf := range data {
+		if strings.HasPrefix(asdf, "param:") {
+			param := strings.Split(asdf, ":")
+			index, err := strconv.ParseInt(page.Param[param[1]], 10, 64)
+			if err == nil {
+				answ = append(answ, index)
+			}
+		} else {
+			index, err := strconv.ParseInt(data[1], 10, 64)
+			if err == nil {
+				answ = append(answ, index)
+			}
+		}
+	}
+	return answ
 }
 func (page *Page) list(name string) []string {
 	return page.Text[name]
