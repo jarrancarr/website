@@ -118,8 +118,10 @@ func (ps *PageStow) AddPage(name string, data *Page) {
 	ps.Ps[name] = data
 }
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger.Debug.Println("ServeHTTP(ttp.ResponseWriter, r *http.Request)")
 	pageLock.Lock()
 	page.ActiveSession = page.Site.GetCurrentSession(w, r)
+	logger.Trace.Println("  running initProcessors")
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.ActiveSession, page)
 		if status != "ok" {
@@ -128,6 +130,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	logger.Trace.Println("  running SiteProcessors")
 	for key, pFunc := range page.Site.SiteProcessor {
 		if page.bypassSiteProcessor == nil || !page.bypassSiteProcessor[key] {
 			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
@@ -138,6 +141,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	logger.Trace.Println("  running preProcessors")
 	for _, pFunc := range page.preProcessor {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
@@ -147,6 +151,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	paramMap := r.URL.Query()
+	logger.Trace.Println("  processing param map")
 	for key, _ := range paramMap {
 		page.Param[key] = paramMap.Get(key)
 	}
@@ -159,6 +164,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.Method == "POST" {
+		logger.Debug.Println("  Method = POST")
 		if page.postHandle[r.FormValue("postProcessingHandler")] == nil {
 		} else {
 			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
@@ -174,6 +180,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
+		logger.Debug.Println("  Method = AJAX")
 		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -184,12 +191,14 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		pageLock.Unlock()
 		return
 	} else {
+		logger.Debug.Println("  Method = GET")
 		// A normal GET request
 		err := page.tmpl.Execute(w, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
+	logger.Trace.Println("  running postProcessor")
 	for _, pFunc := range page.postProcessor {
 		status, err := pFunc(w, r, page.ActiveSession, page)
 		if status != "ok" {

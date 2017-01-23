@@ -146,7 +146,7 @@ func (site *Site) AddParamTriggerHandler(name string, handle postFunc) *Site {
 	site.ParamTriggerHandle[name] = handle
 	return site
 }
-func (site *Site) item(lang string, name ...string) template.CSS {
+func (site *Site) Item(lang string, name ...string) template.CSS {
 	var item []string
 	var index int64
 	var err error
@@ -182,6 +182,7 @@ func (site *Site) fullBody(lang, name string) string {
 	return whole[1:]
 }
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
+	logger.Trace.Println("upload()")
 	r.ParseMultipartForm(32 << 20)
 	file, handler, err := r.FormFile("uploadfile")
 	if err != nil {
@@ -199,6 +200,7 @@ func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	site.ServeHTTP(w, r)
 }
 func ServeResource(w http.ResponseWriter, r *http.Request) {
+	logger.Trace.Println("ServeResource()")
 	path := ResourceDir + "/public" + r.URL.Path
 	if strings.HasSuffix(r.URL.Path, "js") {
 		w.Header().Add("Content-Type", "application/javascript")
@@ -208,6 +210,8 @@ func ServeResource(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Content-Type", "image/png+xml")
 	} else if strings.HasSuffix(r.URL.Path, "svg") {
 		w.Header().Add("Content-Type", "image/svg+xml")
+	} else if strings.HasSuffix(r.URL.Path, "mp3") {
+		w.Header().Add("Content-Type", "audio/mpeg")
 	}
 
 	data, err := ioutil.ReadFile(path)
