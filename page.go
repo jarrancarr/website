@@ -485,11 +485,11 @@ func (page *Page) getTextByParam(name string) []string { // returns a pages Data
 	return page.Text[page.Param[name]]
 }
 func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call to retrieve data from the server.
-	url := page.Url // this call should be accompanied by a target on the page
+	url := page.Url
 	handler := ""   // and the AJAX Handler function
-	trigger := ""
-	target := ""
-	onClick := ""
+	trigger := ""	// the button that initiates the AJAX call
+	target := ""	// the output div 
+	perItem := ""	// extra processing for each item as it is included in the target list
 	item := "$(document.createElement('li')).text( i + ' - ' + val )"
 	jsData := "'greet':'hello there, partner!'"
 	variables := ""
@@ -497,6 +497,9 @@ func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call t
 	setup := ""
 	post := ""
 	for _, d := range data {
+		if page.Param[d] != "" {
+			d = page.Param[d]
+		}
 		if strings.HasPrefix(d, "url:") {
 			url = page.getParam(d[4:])
 		}
@@ -515,8 +518,8 @@ func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call t
 		if strings.HasPrefix(d, "item:") {
 			item = d[5:]
 		}
-		if strings.HasPrefix(d, "onclick:") {
-			onClick = page.getParam(d[8:])
+		if strings.HasPrefix(d, "perItem:") {
+			perItem = page.getParam(d[8:])
 		}
 		if strings.HasPrefix(d, "var:") {
 			variables += "var " + d[4:] + "; "
@@ -534,7 +537,7 @@ func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call t
 	if success == "" {
 		success = `var ul = $( "<ul/>", {"class": "my-new-list"});
 			var obj = JSON.parse(data);	$("#` + target + `").empty(); $("#` + target + `").append(ul);
-			$.each(obj, function(i,val) { item =` + item + `; ` + onClick + ` ul.append( item ); });`
+			$.each(obj, function(i,val) { item =` + item + `; ` + perItem + ` ul.append( item ); });`
 	}
 	return template.HTML(`<script>` + variables + `
 		$(function() {
@@ -560,8 +563,8 @@ func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call t
 }
 
 //sets up a div target for the ajax call
-func (page *Page) target(name string) template.HTML {
-	return template.HTML("<div id='" + name + "'></div>")
+func (page *Page) target(data ...string) template.HTML {
+	return template.HTML("<div id='" + data[0] + "'>"+data[1]+"</div>")
 }
 func (page *Page) Render() template.HTML {
 	buf := new(bytes.Buffer)

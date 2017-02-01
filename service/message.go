@@ -4,23 +4,29 @@ import (
 	"time"
 	"github.com/jarrancarr/website"
 	"net/http"
-	"fmt"
+	//"fmt"
+	"errors"
 	"io/ioutil"
 	"strings"
 	"strconv"
+)
+
+var (
+	Logger *website.Log
 )
 
 type Message struct {
 	message,author,room string
 	timestamp time.Time
 	read bool
+	reference *Message
 }
 type Room struct {
 	passCode string
-	message []Message
+	message []*Message
+	input chan *Message
 	ears map[string] chan *Message
-	primeModerator string 		// userName
-	assistantModerator string 		// userName
+	Moderator []*website.Account
 }
 type MessageService struct {
 	room map[string]*Room
@@ -32,20 +38,24 @@ type PersonalMessageQueue struct {
 	lastPost int
 }
 
-func CreateMessageService(acs *website.AccountService) *MessageService {
+func CreateService(acs *website.AccountService) *MessageService {
+	Logger.Trace.Println();
 	mss := MessageService{make(map[string]*Room), acs}
 	return &mss
 }
-func (mss *MessageService) Execute(s *website.Session, data []string) string {
-//	switch data[1] {
-//	}
+func (mss *MessageService) Execute(data []string ,p *website.Page) string {
+	Logger.Trace.Println();
+	switch data[0] {
+		case "roomList": return mss.roomList()
+	}
 	return "huh?"
 }
 func (mss *MessageService) Status() string {
 	return "good"
 }
-func (mss *MessageService) createRoom(name, passCode, userName string) {
-	mss.room[name] = &Room{passCode, make([]Message,100), make(map[string] chan *Message,100), "", ""}
+func (mss *MessageService) createRoom(name, passCode string, user *website.Account) {
+	Logger.Trace.Println();
+	mss.room[name] = &Room{passCode, nil, make(chan *Message), make(map[string] chan *Message), []*website.Account{user}}
 	//mss.join(name, userName)
 }
 func (mss *MessageService) join(roomName, userName string) {
@@ -62,8 +72,8 @@ func (mss *MessageService) exit(roomName, userName string) {
 	user.Item["MessageService-Queue-"+roomName] = nil
 }
 func (room *Room) post(message, author, roomName string) {
-	m := Message{message, author, roomName, time.Now(), false}
-	room.message = append(room.message, m)
+	m := Message{message, author, roomName, time.Now(), false, nil}
+	room.message = append(room.message, &m)
 	for _, ear := range(room.ears) {
 		ear <- &m
 	}
@@ -73,10 +83,19 @@ func (pmq PersonalMessageQueue) listen(ear <-chan *Message) {
 		pmq.messages = append(pmq.messages, m)
 	}
 }
-
-func (mss *MessageService) TestAJAX(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	w.Write([]byte(`{ "one": "Singular sensation", "two": "Beady little eyes", "three": "Little birds pitch by my doorstep"}`))
-	return "ok", nil
+func (mss *MessageService) roomList() string {
+	roomList := "{"
+	first := true
+	for k,r := range(mss.room) {
+		if !first {
+			roomList += ","
+		} else {
+			first = false
+		}
+		roomList += `"`+k+`":`+strconv.Itoa(len(r.ears))
+	}
+	roomList += "}"
+	return roomList
 }
 func (mss *MessageService) Get(page *website.Page, session *website.Session, data []string) website.Item {
 	switch data[0] {
@@ -90,28 +109,19 @@ func (mss *MessageService) Get(page *website.Page, session *website.Session, dat
 			t, n, d,
 		}
 }
-
-func (mss *MessageService) PostStatement(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	w.Write([]byte(`{ "one": "Singular sensation", "two": "Beady little eyes", "three": "Little birds pitch by my doorstep"}`))
-	return "ok", nil
-}
-func (mss *MessageService) CreateRoom(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	Logger.Trace.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
 	httpData, _ :=ioutil.ReadAll(r.Body)
-	requestedRoom := strings.Split(string(httpData),"=")[1]
-	mss.createRoom(requestedRoom,"password",s.GetUserName())
-	fmt.Println("create room: "+requestedRoom)
-	roomList := "{"
-	first := true
-	for k,r := range(mss.room) {
-		if !first {
-			roomList += ","
-		} else {
-			first = false
-		}
-		roomList += `"`+k+`":`+strconv.Itoa(len(r.ears))
+	if (httpData == nil || len(httpData) == 0) {
+		return "", errors.New("No Data")
 	}
-	roomList += "}"
-	fmt.Println(roomList)
-	w.Write([]byte(roomList))
+	dataList := strings.Split(string(httpData),"&")
+	roomName := strings.Split(dataList[0],"=")[1]
+	roomPass := strings.Split(dataList[1],"=")[1]
+	
+	user, _ := mss.acs.GetAccount(s.GetUserName())
+	mss.createRoom(roomName,roomPass,user)
+	
+	w.Write([]byte(mss.roomList()))
 	return "ok", nil
 }

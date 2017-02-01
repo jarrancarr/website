@@ -108,6 +108,7 @@ func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Reque
 	password := r.Form.Get("Password")
 
 	for _, u := range Users {
+		logger.Debug.Println("comparing "+userName+" to "+u.User+", "+password+" to "+u.Password)
 		if userName == u.User && password == u.Password {
 			s.Data["name"] = u.First + " " + u.Middle + ". " + u.Last
 			s.Data["userName"] = u.User
@@ -146,4 +147,13 @@ func (acs *AccountService) CheckSecure(w http.ResponseWriter, r *http.Request, s
 func (acs *AccountService) GetUserSession(userName string) *Session {
 	logger.Debug.Println("AccountService.GetUserSession("+userName+")")
 	return acs.active[userName]
+}
+
+func (acs *AccountService) GetAccount(userName string) (*Account, error) {	
+	for _, u := range Users {
+		if userName == u.User {
+			return &u, nil
+		}
+	}
+	return nil, errors.New("No Account Found.")
 }
