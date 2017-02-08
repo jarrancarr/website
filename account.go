@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"errors"
 	"time"
+	"strings"
 )
 
 type Permission struct {
@@ -17,18 +18,20 @@ type Role struct {
 }
 
 type Account struct {
-	Title, First, Middle, Last, Suffix, User, Password, Email string
-	Role                                               []*Role
-	Expired				bool
-	Expiration			time.Time
+	Name 					[]string 
+	User, Password, Email 	string
+	Role					[]*Role
+	Expired					bool
+	Expiration				time.Time
 }
 
 type AccountService struct {
 	SiteSessionCookieName	string
 	Domain  				string
-	active 					map[string]*Session
+	Active 					map[string]*Session
 	FailLoginPage			string
 	LogoutPage				string
+	Interactive				map[string]interface{}
 }
 
 var (
@@ -48,17 +51,17 @@ var (
 		"premium":    &Role{"premium", "Premium Account", []string{"premium", "basic"}},
 	}
 	Users = []Account{
-		Account{"Mr.", "Jarran", "J", "Carr", "", "jcarr", "JCarr48", "", []*Role{StandardRoles["premium"]}, false, time.Now().Add(time.Hour*24*30)},
-		Account{"Mr.", "Jarran", "J", "Carr", "", "admin", "ADmin48", "", []*Role{StandardRoles["admin"]}, false, time.Now().Add(time.Hour*24*30)},
-		Account{"Mrs.", "Jamie", "N", "Carr", "", "jncarr", "JNCarr48", "", []*Role{StandardRoles["manager"]}, false, time.Now().Add(time.Hour*24*30)},
-		Account{"Mr.", "Logan", "J", "Carr", "", "lcarr", "LCarr48", "", []*Role{StandardRoles["basic"]}, false, time.Now().Add(time.Hour*24*30)},
+		Account{[]string{"Mr.", "Jarran", "J", "Carr"}, "jcarr", "JCarr48", "", []*Role{StandardRoles["premium"]}, false, time.Now().Add(time.Hour*24*30)},
+		Account{[]string{"Mr.", "Jarran", "J", "Carr"}, "admin", "ADmin48", "", []*Role{StandardRoles["admin"]}, false, time.Now().Add(time.Hour*24*30)},
+		Account{[]string{"Mrs.", "Jamie", "N", "Carr"}, "jncarr", "JNCarr48", "", []*Role{StandardRoles["manager"]}, false, time.Now().Add(time.Hour*24*30)},
+		Account{[]string{"Logan", "J", "Carr"}, "lcarr", "LCarr48", "", []*Role{StandardRoles["basic"]}, false, time.Now().Add(time.Hour*24*30)},
 	}
 )
 
 
 func CreateAccountService() *AccountService {
 	logger.Debug.Println("CreateAccountService()")
-	as := AccountService{"", "", make(map[string]*Session), "login", "logout"}
+	as := AccountService{"", "", make(map[string]*Session), "login", "logout", make(map[string]interface{})}
 	return &as
 }
 
@@ -110,10 +113,11 @@ func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Reque
 	for _, u := range Users {
 		logger.Debug.Println("comparing "+userName+" to "+u.User+", "+password+" to "+u.Password)
 		if userName == u.User && password == u.Password {
-			s.Data["name"] = u.First + " " + u.Middle + ". " + u.Last
+			s.Data["name"] = strings.Join(u.Name," ")
 			s.Data["userName"] = u.User
 			s.Item["account"] = u
-			acs.active[u.User] = s
+			acs.Active[u.User] = s
+			logger.Info.Println("User:"+u.User+" added to active users")
 			return r.Form.Get("redirect"), nil
 		}
 	}
@@ -128,7 +132,7 @@ func (acs *AccountService) RegisterPostHandler(w http.ResponseWriter, r *http.Re
 
 func (acs *AccountService) LogoutPostHandler(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error) {
 	logger.Debug.Println("AccountService.LogoutPostHandler(w http.ResponseWriter, r *http.Request, session<"+s.GetId()+">, page<"+p.Title+">)")
-	acs.active[s.Data["userName"]] = nil
+	acs.Active[s.Data["userName"]] = nil
 	return acs.LogoutPage, nil
 }
 
@@ -146,10 +150,14 @@ func (acs *AccountService) CheckSecure(w http.ResponseWriter, r *http.Request, s
 
 func (acs *AccountService) GetUserSession(userName string) *Session {
 	logger.Debug.Println("AccountService.GetUserSession("+userName+")")
-	return acs.active[userName]
+	if acs.Active[userName]==nil {
+		logger.Error.Println("No User:"+userName+" found")
+	}
+	return acs.Active[userName]
 }
 
 func (acs *AccountService) GetAccount(userName string) (*Account, error) {	
+	logger.Debug.Println("acs.GetAccount("+userName+")")
 	for _, u := range Users {
 		if userName == u.User {
 			return &u, nil

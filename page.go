@@ -33,15 +33,12 @@ type Page struct {
 	postProcessor       []postFunc          // processors after page
 	bypassSiteProcessor map[string]bool     // any site processor to not precess for this page
 	ActiveSession       *Session
+	pageLock			sync.Mutex
 }
 
 type PageStow struct {
 	Ps map[string]*Page
 }
-
-var (
-	pageLock = &sync.Mutex{}
-)
 
 func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	var text map[string][]string
@@ -118,15 +115,15 @@ func (ps *PageStow) AddPage(name string, data *Page) {
 	ps.Ps[name] = data
 }
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Debug.Println("ServeHTTP(ttp.ResponseWriter, r *http.Request)")
-	pageLock.Lock()
+	logger.Debug.Println("ServeHTTP(http.ResponseWriter, r *http.Request) from page:"+page.Title)
+	page.pageLock.Lock()
 	page.ActiveSession = page.Site.GetCurrentSession(w, r)
 	logger.Trace.Println("  running initProcessors")
 	for _, pFunc := range page.initProcessor {
 		status, err := pFunc(w, r, page.ActiveSession, page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			pageLock.Unlock()
+			page.pageLock.Unlock()
 			return
 		}
 	}
@@ -136,7 +133,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status, _ := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 			if status != "ok" {
 				http.Redirect(w, r, status, 302)
-				pageLock.Unlock()
+				page.pageLock.Unlock()
 				return
 			}
 		}
@@ -146,7 +143,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status, err := pFunc(w, r, page.Site.GetCurrentSession(w, r), page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			pageLock.Unlock()
+			page.pageLock.Unlock()
 			return
 		}
 	}
@@ -177,18 +174,23 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		pageLock.Unlock()
+		page.pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
-		logger.Debug.Println("  Method = AJAX")
-		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
+		logger.Debug.Println("  Method = AJAX, ajaxProcessingHandler="+r.Header.Get("ajaxProcessingHandler"))
+		if r.Header.Get("ajaxProcessingHandler")=="" || page.ajaxHandle == nil {
+			http.Error(w, "No such AJAX Handler", http.StatusInternalServerError)
+			page.pageLock.Unlock()
+			return
+		}
+		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, nil, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 		if status != "ok" {
 			http.Redirect(w, r, status, 307)
 		}
-		pageLock.Unlock()
+		page.pageLock.Unlock()
 		return
 	} else {
 		logger.Debug.Println("  Method = GET")
@@ -203,12 +205,12 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status, err := pFunc(w, r, page.ActiveSession, page)
 		if status != "ok" {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			pageLock.Unlock()
+			page.pageLock.Unlock()
 			return
 		}
 	}
 	page.Site.GetCurrentSession(w, r).Data["navigation"] = r.RequestURI
-	pageLock.Unlock()
+	page.pageLock.Unlock()
 }
 func (page *Page) AddTable(name string, headers, data []string) *html.HTMLTable {
 	if page.tables == nil {
@@ -326,7 +328,6 @@ func (page *Page) debug(name ...string) template.HTML {
 	all += "</code></p></div>"
 	return template.HTML(all)
 }
-
 func (page *Page) getHtml(name ...string) []template.HTML {
 	logger.Debug.Println("getHtml('"+strings.Join(name,"', '")+"')")
 	length := page.params(name[1:]...)

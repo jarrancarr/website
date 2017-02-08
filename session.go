@@ -36,6 +36,9 @@ func (s *Session) GetData(name string) string {
 func (s *Session) GetId() string {
 	return s.Data["id"]
 }
-func (s *Session) GetUserName() string {
+func (s *Session) GetFullName() string {
 	return s.Data["name"]
+}
+func (s *Session) GetUserName() string {
+	return s.Data["userName"]
 }
