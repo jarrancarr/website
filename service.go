@@ -17,7 +17,7 @@ type Item interface {}
 
 type Service interface {
 	Status() string
-	Execute([]string, *Page) string
+	Execute([]string, *Session, *Page) string
 	Get(*Page, *Session, []string) Item
 }
 

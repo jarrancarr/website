@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"strings"
 	"strconv"
+	"sync"
 )
 
 type ECommerseService struct {
@@ -16,6 +17,7 @@ type ECommerseService struct {
 	acs *website.AccountService
 	pages *website.PageStow
 	site *website.Site
+	Lock sync.Mutex
 }
 func CreateService(acs *website.AccountService) *ECommerseService {
 	ecs := ECommerseService{acs:acs}
@@ -24,7 +26,7 @@ func CreateService(acs *website.AccountService) *ECommerseService {
 func (ecs *ECommerseService) Status() string {
 	return "good"
 }
-func (ecs *ECommerseService) Execute(data []string, page *website.Page) string {
+func (ecs *ECommerseService) Execute(data []string, s *website.Session, page *website.Page) string {
 	switch data[0] {
 	case "product":
 		page := ecs.pages.Ps[data[1]]

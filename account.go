@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 	"strings"
+	"sync"
 )
 
 type Permission struct {
@@ -32,6 +33,7 @@ type AccountService struct {
 	FailLoginPage			string
 	LogoutPage				string
 	Interactive				map[string]interface{}
+	Lock sync.Mutex
 }
 
 var (
@@ -61,7 +63,7 @@ var (
 
 func CreateAccountService() *AccountService {
 	logger.Debug.Println("CreateAccountService()")
-	as := AccountService{"", "", make(map[string]*Session), "login", "logout", make(map[string]interface{})}
+	as := AccountService{"", "", make(map[string]*Session), "login", "logout", make(map[string]interface{}), sync.Mutex{}}
 	return &as
 }
 
@@ -69,37 +71,36 @@ func (ecs *AccountService) Status() string {
 	return "good"
 }
 
-func (acs *AccountService) Execute(data []string, page *Page) string {
-	logger.Debug.Println("AccountService.Execute("+data[0]+", page<"+page.Title+">)")
-	session := page.ActiveSession
+func (acs *AccountService) Execute(data []string, s *Session, p *Page) string {
+	logger.Trace.Println("AccountService.Execute("+data[0]+", page<"+p.Title+">)")
 	switch data[0] {
 		case "getName":
-			return session.Data["name"]
+			return s.Data["name"]
 			break
 		case "session":
-			return session.Data[data[1]]
+			return s.Data[data[1]]
 			break
 		case "isLoggedIn":
-			if session == nil {
+			if s == nil {
 				return "session is null"
 			}
-			if session.Data == nil {
+			if s.Data == nil {
 				return "session.Data is null"
 			}
-			if session.Data["name"] == "Anonymous" {
+			if s.Data["name"] == "Anonymous" {
 				return "False"
 			} else {
 				return "True"
 			}
 		case "getStatus":
-			return session.Data["status"]
+			return s.Data["status"]
 			break
 	}
 	return ""
 }
 
-func (acs *AccountService) Get(page *Page, s *Session, data []string) Item {
-	logger.Debug.Println("AccountService.Get(page<"+page.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
+func (acs *AccountService) Get(p *Page, s *Session, data []string) Item {
+	logger.Debug.Println("AccountService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
 	return struct { 
 		Title , Name, Desc string
 		} {"Duke","Bingo","The Man!"}

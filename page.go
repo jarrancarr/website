@@ -89,6 +89,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"css":     page.css,
 			"script":  page.Site.GetScript,
 			"service": page.service,
+			"session": page.session,
 			"get":     page.get,
 			"page":    page.page,
 			"debug":   page.debug,
@@ -99,7 +100,6 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"line":    page.line,
 			"data":    page.data,
 			"param":   page.getParam,
-			"session": page.getSessionParam,
 			"ajax":    page.ajax,
 			"target":  page.target}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
@@ -115,7 +115,7 @@ func (ps *PageStow) AddPage(name string, data *Page) {
 	ps.Ps[name] = data
 }
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Debug.Println("ServeHTTP(http.ResponseWriter, r *http.Request) from page:"+page.Title)
+	logger.Trace.Println("ServeHTTP(http.ResponseWriter, r *http.Request) from page:"+page.Title)
 	page.pageLock.Lock()
 	page.ActiveSession = page.Site.GetCurrentSession(w, r)
 	logger.Trace.Println("  running initProcessors")
@@ -161,7 +161,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if r.Method == "POST" {
-		logger.Debug.Println("  Method = POST")
+		logger.Trace.Println("Method = POST")
 		if page.postHandle[r.FormValue("postProcessingHandler")] == nil {
 		} else {
 			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
@@ -177,13 +177,13 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
-		logger.Debug.Println("  Method = AJAX, ajaxProcessingHandler="+r.Header.Get("ajaxProcessingHandler"))
+		logger.Trace.Println("Method = AJAX, ajaxProcessingHandler="+r.Header.Get("ajaxProcessingHandler"))
 		if r.Header.Get("ajaxProcessingHandler")=="" || page.ajaxHandle == nil {
 			http.Error(w, "No such AJAX Handler", http.StatusInternalServerError)
 			page.pageLock.Unlock()
 			return
 		}
-		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, nil, page)
+		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.ActiveSession, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
@@ -193,14 +193,14 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.pageLock.Unlock()
 		return
 	} else {
-		logger.Debug.Println("  Method = GET")
+		logger.Trace.Println("Method = GET")
 		// A normal GET request
 		err := page.tmpl.Execute(w, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
-	logger.Trace.Println("  running postProcessor")
+	logger.Trace.Println("running postProcessor")
 	for _, pFunc := range page.postProcessor {
 		status, err := pFunc(w, r, page.ActiveSession, page)
 		if status != "ok" {
@@ -385,6 +385,16 @@ func (page *Page) jsp(input string, index int) string {
 func (page *Page) data(data string) interface{} {
 	return page.Data[data]
 }
+func (page *Page) session(data ...string) interface{} {
+	if page.ActiveSession == nil {
+		return "no session"
+	}
+	switch(data[0]) {
+		case "param": return page.ActiveSession.Data[data[1]]
+		case "item" : return page.ActiveSession.Item[data[1]]
+	}
+	return page.ActiveSession.GetFullName()
+}
 func (page *Page) params(data ...string) int { // add any context parameters: returns the count of the minimum array size
 	logger.Trace.Println("params("+strings.Join(data,",")+")")
 	if len(data) == 0 { return 1 }
@@ -462,7 +472,7 @@ func (page *Page) line(name string) string { // retrieves the entire line of tex
 func (page *Page) getCSS(data ...string) template.CSS     { return template.CSS(page.text(data...)) }
 func (page *Page) getScript(data ...string) template.JS   { return template.JS(page.text(data...)) }
 func (page *Page) service(data ...string) template.HTML { // calls the service by its registered name
-	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page))
+	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page.ActiveSession, page))
 }
 func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) Object
 	return page.Site.Service[data[0]].Get(page, page.ActiveSession, data[1:])
@@ -472,15 +482,6 @@ func (page *Page) getParam(name string) string { // returns a page's named param
 		return name
 	}
 	return page.Param[name]
-}
-func (page *Page) getSessionParam(name string) string { // returns a session paramater
-	if page.ActiveSession == nil {
-		return "no session"
-	}
-	if name == "language" {
-		return page.ActiveSession.GetLang()
-	}
-	return page.ActiveSession.Data[name]
 }
 func (page *Page) getTextByParam(name string) []string { // returns a pages Data list via a page's paramater name
 	return page.Text[page.Param[name]]
