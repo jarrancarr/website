@@ -15,7 +15,7 @@ import (
 )
 
 type Page struct {
-	Title, Url          string
+	Title, Url, Status  string
 	Text                map[string][]string
 	Data                map[string]interface{}
 	Param               map[string]string
@@ -33,7 +33,7 @@ type Page struct {
 	postProcessor       []postFunc          // processors after page
 	bypassSiteProcessor map[string]bool     // any site processor to not precess for this page
 	ActiveSession       *Session
-	pageLock			sync.Mutex
+	pageLock            sync.Mutex
 }
 
 type PageStow struct {
@@ -82,7 +82,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 		}
 	}
 
-	page := &Page{Title: title, Text: text, Site: site, Param: make(map[string]string), Html: &html.HTMLStow{nil}}
+	page := &Page{Title: title, Status: "OK", Text: text, Site: site, Param: make(map[string]string), Html: &html.HTMLStow{nil}}
 	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
@@ -115,7 +115,7 @@ func (ps *PageStow) AddPage(name string, data *Page) {
 	ps.Ps[name] = data
 }
 func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	logger.Trace.Println("ServeHTTP(http.ResponseWriter, r *http.Request) from page:"+page.Title)
+	logger.Trace.Println("ServeHTTP(http.ResponseWriter, r *http.Request) from page:" + page.Title)
 	page.pageLock.Lock()
 	page.ActiveSession = page.Site.GetCurrentSession(w, r)
 	logger.Trace.Println("  running initProcessors")
@@ -177,8 +177,8 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
-		logger.Trace.Println("Method = AJAX, ajaxProcessingHandler="+r.Header.Get("ajaxProcessingHandler"))
-		if r.Header.Get("ajaxProcessingHandler")=="" || page.ajaxHandle == nil {
+		logger.Trace.Println("Method = AJAX, ajaxProcessingHandler=" + r.Header.Get("ajaxProcessingHandler"))
+		if r.Header.Get("ajaxProcessingHandler") == "" || page.ajaxHandle == nil {
 			http.Error(w, "No such AJAX Handler", http.StatusInternalServerError)
 			page.pageLock.Unlock()
 			return
@@ -329,9 +329,9 @@ func (page *Page) debug(name ...string) template.HTML {
 	return template.HTML(all)
 }
 func (page *Page) getHtml(name ...string) []template.HTML {
-	logger.Debug.Println("getHtml('"+strings.Join(name,"', '")+"')")
+	logger.Debug.Println("getHtml('" + strings.Join(name, "', '") + "')")
 	length := page.params(name[1:]...)
-	logger.Debug.Printf("length = %d",length)
+	logger.Debug.Printf("length = %d", length)
 	if page.Html == nil {
 		if page.Parent == nil {
 			return nil
@@ -340,7 +340,7 @@ func (page *Page) getHtml(name ...string) []template.HTML {
 	}
 	var list []template.HTML
 	if length > 0 {
-		for i := 0 ; i<length ; i++ {
+		for i := 0; i < length; i++ {
 			page.Param["ITERATOR"] = fmt.Sprintf("%d", i)
 			list = append(list, template.HTML(page.jsp(page.Html.Hs[name[0]][0].Render(), i)))
 		}
@@ -350,14 +350,14 @@ func (page *Page) getHtml(name ...string) []template.HTML {
 	}
 }
 func (page *Page) getHtmls(name ...string) []template.HTML {
-	logger.Trace.Println("getHtmls("+strings.Join(name,",")+")")
+	logger.Trace.Println("getHtmls(" + strings.Join(name, ",") + ")")
 	length := page.params(name[1:]...)
 	if page.Html == nil {
 		logger.Debug.Println("page.Html is nil... checking parent")
 		return page.Parent.getHtmls(name...)
 	}
 	var list []template.HTML
-	for i := 0 ; i<length ; i++ {
+	for i := 0; i < length; i++ {
 		for _, ht := range page.Html.Hs[name[0]] {
 			page.Param["ITERATOR"] = page.Param["ITERATOR"] + " " + fmt.Sprintf("%d", i)
 			list = append(list, template.HTML(page.jsp(ht.Render(), i)))
@@ -366,18 +366,18 @@ func (page *Page) getHtmls(name ...string) []template.HTML {
 	return list
 }
 func (page *Page) css(name ...string) template.CSS { // item pulls a string from the parameter text file by name and optionally a
-	logger.Trace.Println("css("+strings.Join(name,",")+")")
+	logger.Trace.Println("css(" + strings.Join(name, ",") + ")")
 	return template.CSS(page.text(name...)) // number indicating which index of that string to pull
 }
 func (page *Page) jsp(input string, index int) string {
-	logger.Trace.Printf("jsp('%s',%d)",input,index)
+	logger.Trace.Printf("jsp('%s',%d)", input, index)
 	if start := strings.Index(input, "${"); start >= 0 {
 		end := strings.Index(input[start:], "}")
 		if index == -1 {
-			return page.jsp(input[:start] + page.Param[input[start+2:start+end]] + input[start+end+1:], index)
+			return page.jsp(input[:start]+page.Param[input[start+2:start+end]]+input[start+end+1:], index)
 		} else {
-			logger.Trace.Println("jsp:mark-- "+input[start+2:start+end]+": "+page.Param[input[start+2:start+end]])
-			return page.jsp(input[:start] + strings.Split(page.Param[input[start+2:start+end]]," ")[index] + input[start+end+1:], index)
+			logger.Trace.Println("jsp:mark-- " + input[start+2:start+end] + ": " + page.Param[input[start+2:start+end]])
+			return page.jsp(input[:start]+strings.Split(page.Param[input[start+2:start+end]], " ")[index]+input[start+end+1:], index)
 		}
 	}
 	return input
@@ -389,18 +389,22 @@ func (page *Page) session(data ...string) interface{} {
 	if page.ActiveSession == nil {
 		return "no session"
 	}
-	switch(data[0]) {
-		case "param": return page.ActiveSession.Data[data[1]]
-		case "item" : return page.ActiveSession.Item[data[1]]
+	switch data[0] {
+	case "param":
+		return page.ActiveSession.Data[data[1]]
+	case "item":
+		return page.ActiveSession.Item[data[1]]
 	}
 	return page.ActiveSession.GetFullName()
 }
 func (page *Page) params(data ...string) int { // add any context parameters: returns the count of the minimum array size
-	logger.Trace.Println("params("+strings.Join(data,",")+")")
-	if len(data) == 0 { return 1 }
-	minimum := 999;
-	for _, d := range data { 
-		pair := strings.SplitN(d, ">>",4)
+	logger.Trace.Println("params(" + strings.Join(data, ",") + ")")
+	if len(data) == 0 {
+		return 1
+	}
+	minimum := 999
+	for _, d := range data {
+		pair := strings.SplitN(d, ">>", 4)
 		if len(pair) == 1 {
 			num, err := strconv.ParseInt(data[1], 10, 64)
 			if err == nil {
@@ -408,24 +412,24 @@ func (page *Page) params(data ...string) int { // add any context parameters: re
 			}
 		}
 		if len(pair) == 2 {
-			words := strings.SplitN(pair[1],",",-1)
-			if len(words) < minimum { 
-				minimum = len(words) 
+			words := strings.SplitN(pair[1], ",", -1)
+			if len(words) < minimum {
+				minimum = len(words)
 			}
-			page.AddParam(pair[0], strings.Join(words," "))
+			page.AddParam(pair[0], strings.Join(words, " "))
 		}
 		if len(pair) == 3 {
-			words := strings.SplitN(pair[2],",",-1)
+			words := strings.SplitN(pair[2], ",", -1)
 			if len(words) < minimum {
-				minimum = len(words) 
+				minimum = len(words)
 			}
-			page.pages.Ps[pair[0]].AddParam(pair[1], strings.Join(words," "))
+			page.pages.Ps[pair[0]].AddParam(pair[1], strings.Join(words, " "))
 		}
 	}
 	return minimum
 }
 func (page *Page) text(name ...string) string { // retrieves a data element as a string
-	logger.Trace.Println("params("+strings.Join(name,",")+")")
+	logger.Trace.Println("params(" + strings.Join(name, ",") + ")")
 	if page.Text[name[0]] == nil { // 'param:temp' will populate the index parameter from the Param list
 		return "" // 'language:xx' will get the paramater for language xx
 	}
@@ -441,8 +445,8 @@ func (page *Page) text(name ...string) string { // retrieves a data element as a
 	return item[index[0]]
 }
 func (page *Page) parse(data ...string) []int64 {
-	logger.Trace.Println("params("+strings.Join(data,",")+")")
-	var answ []int64	
+	logger.Trace.Println("params(" + strings.Join(data, ",") + ")")
+	var answ []int64
 	for _, asdf := range data {
 		if strings.HasPrefix(asdf, "param:") {
 			param := strings.Split(asdf, ":")
@@ -488,10 +492,10 @@ func (page *Page) getTextByParam(name string) []string { // returns a pages Data
 }
 func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call to retrieve data from the server.
 	url := page.Url
-	handler := ""   // and the AJAX Handler function
-	trigger := ""	// the button that initiates the AJAX call
-	target := ""	// the output div 
-	perItem := ""	// extra processing for each item as it is included in the target list
+	handler := "" // and the AJAX Handler function
+	trigger := "" // the button that initiates the AJAX call
+	target := ""  // the output div
+	perItem := "" // extra processing for each item as it is included in the target list
 	item := "$(document.createElement('li')).text( i + ' - ' + val )"
 	jsData := "'greet':'hello there, partner!'"
 	variables := ""
@@ -566,7 +570,7 @@ func (page *Page) ajax(data ...string) template.HTML { // sets up an ajax call t
 
 //sets up a div target for the ajax call
 func (page *Page) target(data ...string) template.HTML {
-	return template.HTML("<div id='" + data[0] + "'>"+data[1]+"</div>")
+	return template.HTML("<div id='" + data[0] + "'>" + data[1] + "</div>")
 }
 func (page *Page) Render() template.HTML {
 	buf := new(bytes.Buffer)
