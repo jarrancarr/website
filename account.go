@@ -1,7 +1,7 @@
 package website
 
 import (
-	//"fmt"
+	"fmt"
 	"net/http"
 	"errors"
 	"time"
@@ -165,4 +165,8 @@ func (acs *AccountService) GetAccount(userName string) (*Account, error) {
 		}
 	}
 	return nil, errors.New("No Account Found.")
+}
+
+func (acc *Account) String() string {
+	return fmt.Sprintf("Name: %s\nUser/Pass: %s/%s\nEmail: %s",strings.Join(acc.Name," "), acc.User, acc.Password, acc.Email)
 }

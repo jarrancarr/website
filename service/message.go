@@ -116,8 +116,8 @@ func (room *Room) getDiscussion(userName string) string {
 	room.lock.Unlock()
 	return discussion
 }
-func (room *Room) whoseThere() string {	
-	Logger.Debug.Println("room.whoseThere()")
+func (room *Room) WhoseThere() string {	
+	Logger.Debug.Println("room.WhoseThere()")
 	room.lock.Lock()
 	who := "["
 	first := true
@@ -127,10 +127,11 @@ func (room *Room) whoseThere() string {
 		} else {
 			first = false
 		}
-		who += `"`+m.GetFullName()+`"`
+		who += `["`+m.GetFullName()+`","`+m.GetUserName()+`"]`
 	}
 	who += "]"
 	room.lock.Unlock()
+	Logger.Debug.Println(who)
 	return who
 }
 func (mss *MessageService) roomList(s *website.Session) string {
@@ -170,7 +171,7 @@ func (mss *MessageService) Get(page *website.Page, session *website.Session, dat
 		}
 }
 func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	Logger.Trace.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
+	Logger.Debug.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
 	httpData, _ :=ioutil.ReadAll(r.Body)
 	if (httpData == nil || len(httpData) == 0) {
 		return "", errors.New("No Data")
@@ -178,6 +179,7 @@ func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.
 	dataList := strings.Split(string(httpData),"&")
 	roomName := strings.Split(dataList[0],"=")[1]
 	roomPass := strings.Split(dataList[1],"=")[1]
+	Logger.Debug.Println("new room is "+roomName+" with password:"+roomPass)
 	mss.createRoom(roomName,roomPass,s)
 	
 	w.Write([]byte(mss.roomList(s)))
@@ -217,4 +219,10 @@ func (mss *MessageService) MessageAJAXHandler(w http.ResponseWriter, r *http.Req
 	
 	w.Write([]byte(mss.room[roomName].getDiscussion(p.ActiveSession.GetFullName())))
 	return "ok", nil
+}
+func (mss *MessageService) GetRoom(roomName string) (*Room, error) {
+	if mss.room[roomName] == nil {
+		return nil, errors.New("No room by that name")
+	}
+	return mss.room[roomName], nil
 }
