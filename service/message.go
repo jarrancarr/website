@@ -138,7 +138,6 @@ func (room *Room) WhoseThere() string {
 	}
 	who += "]"
 	room.lock.Unlock()
-	Logger.Debug.Println(who)
 	return who
 }
 func (mss *MessageService) roomList(s *website.Session) string {
@@ -179,7 +178,7 @@ func (mss *MessageService) Get(page *website.Page, session *website.Session, dat
 	}
 }
 func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	Logger.Debug.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
+	Logger.Trace.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
 	httpData, _ :=ioutil.ReadAll(r.Body)
 	if (httpData == nil || len(httpData) == 0) {
 		return "", errors.New("No Data")
@@ -222,7 +221,7 @@ func (mss *MessageService) MessageAJAXHandler(w http.ResponseWriter, r *http.Req
 
 	mss.room[roomName].post(p.ActiveSession.GetFullName(), unencodedMessage)
 
-	Logger.Debug.Println("User:" + p.ActiveSession.GetFullName() + " from Room: " + roomName + "  <<" + unencodedMessage + ">>")
+	//Logger.Debug.Println("User:" + p.ActiveSession.GetFullName() + " from Room: " + roomName + "  <<" + unencodedMessage + ">>")
 
 	w.Write([]byte(mss.room[roomName].getDiscussion(p.ActiveSession.GetFullName())))
 	return "ok", nil

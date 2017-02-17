@@ -177,7 +177,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
-		logger.Trace.Println("Method = AJAX, ajaxProcessingHandler=" + r.Header.Get("ajaxProcessingHandler"))
+		logger.Debug.Println("Method = AJAX, ajaxProcessingHandler=" + r.Header.Get("ajaxProcessingHandler"))
 		if r.Header.Get("ajaxProcessingHandler") == "" || page.ajaxHandle == nil {
 			http.Error(w, "No such AJAX Handler", http.StatusInternalServerError)
 			page.pageLock.Unlock()
