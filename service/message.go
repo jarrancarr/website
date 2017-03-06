@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/jarrancarr/website"
-	//"fmt"
+	"fmt"
 	"errors"
 	"io/ioutil"
 	"strconv"
@@ -48,7 +48,7 @@ func CreateService(acs *website.AccountService) *MessageService {
 }
 func (mss *MessageService) Execute(data []string, s *website.Session, p *website.Page) string {
 	mss.lock.Lock()
-	Logger.Trace.Println(data[0] + " " + data[1])
+	Logger.Trace.Println("MessageService.Execute("+data[0]+", page<>)")
 	switch data[0] {
 	case "roomList":
 		return mss.roomList(s)
@@ -66,12 +66,28 @@ func (mss *MessageService) Execute(data []string, s *website.Session, p *website
 		mss.exitRoom(mss.room[data[1]], s)
 		mss.lock.Unlock()
 		return "ok"
+	case "#activeRooms":
+		mss.lock.Unlock()
+		return fmt.Sprintf("%d",len(mss.room))
+		break;
 	}
 	mss.lock.Unlock()
 	return "huh?"
 }
 func (mss *MessageService) Status() string {
 	return "good"
+}
+func (mss *MessageService) Metrics(what ...string) int {
+	switch(what[0]) {
+		case "rooms": return len(mss.room)
+		case "totalMessages": return 0
+		case "room": 
+			switch(what[2]) {
+				case "messages": return len(mss.room[what[1]].message)
+				case "members": return len(mss.room[what[1]].member)
+			}
+	}
+	return 0
 }
 func (mss *MessageService) createRoom(name, passCode string, s *website.Session) {
 	Logger.Trace.Println("mss.createRoom(" + name + "," + passCode + ")")
@@ -94,6 +110,7 @@ func (mss *MessageService) exitRoom(r *Room, s *website.Session) {
 	}
 }
 func (room *Room) post(author, message string) {
+	Logger.Trace.Println("MessageService.post("+author+", "+message+")")
 	room.lock.Lock()
 	m := Message{message, author, time.Now(), false, nil}
 	room.message = append(room.message, &m)
@@ -165,9 +182,25 @@ func (mss *MessageService) roomList(s *website.Session) string {
 	roomList += `} }`
 	return roomList
 }
-func (mss *MessageService) Get(page *website.Page, session *website.Session, data []string) website.Item {
+func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
+	Logger.Debug.Println("MessageService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
+	
 	switch data[0] {
+		case "getAllRooms":
+			var answ []interface{}
+			for name, room := range(mss.room) {
+				answ = append(answ, struct { 
+					Name string
+					Messages, Occupance int
+				}{
+					name,
+					len(room.message),
+					len(room.member),
+				} )
+			}
+			return answ
 	}
+	
 	t := "Duke"
 	n := "Bingo"
 	d := "The Man!"

@@ -164,7 +164,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger.Trace.Println("Method = POST")
 		if page.postHandle[r.FormValue("postProcessingHandler")] == nil {
 		} else {
-			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.Site.GetCurrentSession(w, r), page)
+			redirect, _ := page.postHandle[r.FormValue("postProcessingHandler")](w, r, page.ActiveSession, page)
 			if redirect != "" {
 				http.Redirect(w, r, redirect, 302)
 			} else {
@@ -177,7 +177,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		page.pageLock.Unlock()
 		return
 	} else if r.Method == "AJAX" {
-		logger.Debug.Println("Method = AJAX, ajaxProcessingHandler=" + r.Header.Get("ajaxProcessingHandler"))
+		logger.Trace.Println("Method = AJAX, ajaxProcessingHandler=" + r.Header.Get("ajaxProcessingHandler"))
 		if r.Header.Get("ajaxProcessingHandler") == "" || page.ajaxHandle == nil {
 			http.Error(w, "No such AJAX Handler", http.StatusInternalServerError)
 			page.pageLock.Unlock()
@@ -186,8 +186,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.ActiveSession, page)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		if status != "ok" {
+		} else if status != "ok" {
 			http.Redirect(w, r, status, 307)
 		}
 		page.pageLock.Unlock()
@@ -386,6 +385,7 @@ func (page *Page) data(data string) interface{} {
 	return page.Data[data]
 }
 func (page *Page) session(data ...string) interface{} {
+	logger.Trace.Println("session(" + strings.Join(data, ",") + ")")
 	if page.ActiveSession == nil {
 		return "no session"
 	}
@@ -476,9 +476,11 @@ func (page *Page) line(name string) string { // retrieves the entire line of tex
 func (page *Page) getCSS(data ...string) template.CSS     { return template.CSS(page.text(data...)) }
 func (page *Page) getScript(data ...string) template.JS   { return template.JS(page.text(data...)) }
 func (page *Page) service(data ...string) template.HTML { // calls the service by its registered name
+	logger.Trace.Println("service(" + strings.Join(data, ",") + ")")
 	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page.ActiveSession, page))
 }
 func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) Object
+	logger.Trace.Println("get(" + strings.Join(data, ",") + ")")
 	return page.Site.Service[data[0]].Get(page, page.ActiveSession, data[1:])
 }
 func (page *Page) getParam(name string) string { // returns a page's named paramater

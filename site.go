@@ -54,6 +54,7 @@ func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Session {
+	logger.Trace.Println("GetCurrentSession(http.ResponseWriter, r *http.Request)")
 	sessionCookie, _ := r.Cookie(site.SiteSessionCookieName)
 	//	cookies := r.Cookies()
 	//	fmt.Printf("found %v cookies\n", len(cookies))
@@ -61,8 +62,10 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 	//		fmt.Println(c.Name + " = " + c.Value)
 	//	}
 	if sessionCookie != nil && site.UserSession[sessionCookie.Value] != nil {
+		logger.Trace.Println("Valid sessionCookie and user session:"+sessionCookie.Value)
 		return site.UserSession[sessionCookie.Value]
 	} else {
+		logger.Trace.Println("creating new session");
 		sessionKey := make([]byte, 16)
 		rand.Read(sessionKey)
 		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, base64.URLEncoding.EncodeToString(sessionKey), "/",

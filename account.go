@@ -72,7 +72,7 @@ func (ecs *AccountService) Status() string {
 }
 
 func (acs *AccountService) Execute(data []string, s *Session, p *Page) string {
-	logger.Trace.Println("AccountService.Execute("+data[0]+", page<"+p.Title+">)")
+	logger.Debug.Println("AccountService.Execute("+data[0]+", page<"+p.Title+">)")
 	switch data[0] {
 		case "getName":
 			return s.Data["name"]
@@ -95,15 +95,25 @@ func (acs *AccountService) Execute(data []string, s *Session, p *Page) string {
 		case "getStatus":
 			return s.Data["status"]
 			break
+		case "#activeSessions":
+			return fmt.Sprintf("%d",len(acs.Active))
+			break;
 	}
 	return ""
 }
 
 func (acs *AccountService) Get(p *Page, s *Session, data []string) Item {
-	logger.Debug.Println("AccountService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
+	logger.Trace.Println("AccountService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
+	
+	switch data[0] {
+		case "getAllSessions":
+			return acs.Active
+	}
+	
+	
 	return struct { 
 		Title , Name, Desc string
-		} {"Duke","Bingo","The Man!"}
+		} {"The","Dude","He abides!"}
 }
 
 func (acs *AccountService) LoginPostHandler(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error) {
