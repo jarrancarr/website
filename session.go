@@ -23,7 +23,7 @@ func (s *Session) AddItem(name string, item interface{}) {
 }
 func (s *Session) GetItem(name string) interface{} {
 	if s == nil {
-		logger.Error.Println("No Session")
+		logger.Trace.Println("No Session")
 		return nil;
 	}
 	if s.Item == nil { return nil }
@@ -37,7 +37,7 @@ func (s *Session) AddData(name, data string) {
 }
 func (s *Session) GetData(name string) string {
 	if s == nil {
-		logger.Error.Println("No Session")
+		logger.Trace.Println("No Session")
 		return "";
 	}
 	if s.Data == nil { return "" }
@@ -46,7 +46,7 @@ func (s *Session) GetData(name string) string {
 func (s *Session) GetId() string {
 	logger.Trace.Println("Session.GetId()")
 	if s == nil {
-		logger.Error.Println("No Session")
+		logger.Trace.Println("No Session")
 		return "";
 	}
 	if s.Data == nil {
@@ -56,7 +56,7 @@ func (s *Session) GetId() string {
 }
 func (s *Session) GetFullName() string {
 	if s == nil {
-		logger.Error.Println("No Session")
+		logger.Trace.Println("No Session")
 		return "";
 	}
 	if s.Data == nil { return "" }
@@ -64,7 +64,7 @@ func (s *Session) GetFullName() string {
 }
 func (s *Session) GetUserName() string {
 	if s == nil {
-		logger.Error.Println("No Session")
+		logger.Trace.Println("No Session")
 		return "";
 	}
 	if s.Data == nil { return "" }

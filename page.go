@@ -83,7 +83,11 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 	}
 
 	page := &Page{Title: title, Status: "OK", Text: text, Site: site, Param: make(map[string]string), Html: &html.HTMLStow{nil}}
-	page.tmpl = template.Must(template.New(tmplName + ".html").Funcs(
+	subName := tmplName
+	for ;strings.Contains(subName,"/"); {
+		subName = subName[strings.Index(subName,"/")+1:]
+	}
+	page.tmpl = template.Must(template.New(subName + ".html").Funcs(
 		template.FuncMap{
 			"table":   page.table,
 			"css":     page.css,
@@ -91,6 +95,7 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"service": page.service,
 			"session": page.session,
 			"get":     page.get,
+			"metrics": page.metrics,
 			"page":    page.page,
 			"debug":   page.debug,
 			"html":    page.getHtml,
@@ -100,8 +105,15 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"line":    page.line,
 			"data":    page.data,
 			"param":   page.getParam,
+			"paramInt":page.getParamInt,
 			"ajax":    page.ajax,
-			"target":  page.target}).
+			"target":  page.target,
+			"add":	   func(i,j int) int { return i + j },
+			"minus":   func(i,j int) int { return i - j },
+			"times":   func(i,j int) int { return i * j },
+			"over":    func(i,j int) int { return i / j },
+			"max":     func(i,j int) int { if i>j { return i } else { return j }},
+			}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -170,6 +182,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} else {
 				err := page.tmpl.Execute(w, page)
 				if err != nil {
+					logger.Error.Println(err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 				}
 			}
@@ -185,6 +198,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		status, err := page.ajaxHandle[r.Header.Get("ajaxProcessingHandler")](w, r, page.ActiveSession, page)
 		if err != nil {
+			logger.Error.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		} else if status != "ok" {
 			http.Redirect(w, r, status, 307)
@@ -283,6 +297,7 @@ func (page *Page) table(name string) template.HTML {
 	return template.HTML(page.tables.Ts[name].Render())
 }
 func (page *Page) page(name ...string) template.HTML {
+	logger.Trace.Println(strings.Join(name,"'"))
 	if page.pages == nil || page.pages.Ps == nil || page.pages.Ps[name[0]] == nil {
 		if page.Site.Pages == nil || page.Site.Pages.Ps == nil || page.Site.Pages.Ps[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
@@ -483,11 +498,22 @@ func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) O
 	logger.Trace.Println("get(" + strings.Join(data, ",") + ")")
 	return page.Site.Service[data[0]].Get(page, page.ActiveSession, data[1:])
 }
+func (page *Page) metrics(data ...string) int {
+	return 0;
+}
 func (page *Page) getParam(name string) string { // returns a page's named paramater
+	logger.Trace.Println("getParam(" + name + ")")
 	if page.Param == nil || page.Param[name] == "" {
-		return name
+		return ""
 	}
 	return page.Param[name]
+}
+func (page *Page) getParamInt(name string) int { // returns a page's named paramater
+	if page.Param == nil || page.Param[name] == "" {
+		return 0
+	}
+	conv, _ := strconv.Atoi(page.Param[name])
+	return conv
 }
 func (page *Page) getTextByParam(name string) []string { // returns a pages Data list via a page's paramater name
 	return page.Text[page.Param[name]]

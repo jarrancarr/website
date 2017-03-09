@@ -183,11 +183,12 @@ func (mss *MessageService) roomList(s *website.Session) string {
 	return roomList
 }
 func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
-	Logger.Debug.Println("MessageService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+data[0]+")")
+	Logger.Trace.Println("MessageService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+strings.Join(data,"|")+")")
 	
 	switch data[0] {
 		case "getAllRooms":
 			var answ []interface{}
+			mss.lock.Lock()
 			for name, room := range(mss.room) {
 				answ = append(answ, struct { 
 					Name string
@@ -198,6 +199,34 @@ func (mss *MessageService) Get(p *website.Page, s *website.Session, data []strin
 					len(room.member),
 				} )
 			}
+			mss.lock.Unlock()
+			return answ
+		case "occupance":
+			var answ []interface{}
+			mss.room[data[1]].lock.Lock()
+			for _, occupant := range(mss.room[data[1]].member) {
+				answ = append(answ, struct { 
+					Name, UserName string
+				}{
+					occupant.Data["name"],
+					occupant.Data["userName"],
+				} )
+			}
+			mss.room[data[1]].lock.Unlock()
+			return answ
+		case "getMessages":
+			var answ []interface{}
+			mss.room[data[1]].lock.Lock()
+			for _, message := range(mss.room[data[1]].message) {
+				answ = append(answ, struct { 
+					TimeStamp, Author, Message string
+				}{
+					message.timestamp.Format("15:04:05.000"),
+					message.author,
+					message.message,
+				} )
+			}
+			mss.room[data[1]].lock.Unlock()
 			return answ
 	}
 	

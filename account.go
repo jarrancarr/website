@@ -72,7 +72,7 @@ func (ecs *AccountService) Status() string {
 }
 
 func (acs *AccountService) Execute(data []string, s *Session, p *Page) string {
-	logger.Debug.Println("AccountService.Execute("+data[0]+", page<"+p.Title+">)")
+	logger.Trace.Println("AccountService.Execute("+data[0]+", page<"+p.Title+">)")
 	switch data[0] {
 		case "getName":
 			return s.Data["name"]

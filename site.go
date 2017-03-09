@@ -84,7 +84,7 @@ func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
 	}
 	site.SiteProcessor[name] = initFunc
 }
-func (site *Site) AddPage(title, template, url string) *Page {
+func (site *Site) AddPage(title, template, url string) *Page {		logger.Trace.Println();
 	page, err := LoadPage(site, title, template, url)
 	if err != nil {
 		fmt.Println(err)
@@ -93,9 +93,9 @@ func (site *Site) AddPage(title, template, url string) *Page {
 	if site.Pages == nil {
 		site.Pages = &PageStow{nil}
 	}
-	if title == "" {
+	if title == "" {		logger.Trace.Println(template);
 		site.Pages.AddPage(template, page)
-	} else {
+	} else {		logger.Trace.Println(title);
 		site.Pages.AddPage(title, page)
 	}
 	return page
