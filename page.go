@@ -163,6 +163,7 @@ func (page *Page) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	logger.Trace.Println("  processing param map")
 	for key, _ := range paramMap {
 		page.Param[key] = paramMap.Get(key)
+		page.ActiveSession.Data[key] = paramMap.Get(key)
 	}
 	for key, _ := range paramMap {
 		if page.paramTriggerHandle[key] != nil {
@@ -492,6 +493,10 @@ func (page *Page) getCSS(data ...string) template.CSS     { return template.CSS(
 func (page *Page) getScript(data ...string) template.JS   { return template.JS(page.text(data...)) }
 func (page *Page) service(data ...string) template.HTML { // calls the service by its registered name
 	logger.Trace.Println("service(" + strings.Join(data, ",") + ")")
+	if page.Site.Service[data[0]] == nil {
+		logger.Error.Println("No service:"+data[0]+" found!")
+		return template.HTML("")
+	}
 	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page.ActiveSession, page))
 }
 func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) Object
@@ -504,6 +509,7 @@ func (page *Page) metrics(data ...string) int {
 func (page *Page) getParam(name string) string { // returns a page's named paramater
 	logger.Trace.Println("getParam(" + name + ")")
 	if page.Param == nil || page.Param[name] == "" {
+		
 		return ""
 	}
 	return page.Param[name]
