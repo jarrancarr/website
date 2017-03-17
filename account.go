@@ -144,6 +144,8 @@ func (acs *AccountService) RegisterPostHandler(w http.ResponseWriter, r *http.Re
 func (acs *AccountService) LogoutPostHandler(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error) {
 	logger.Debug.Println("AccountService.LogoutPostHandler(w http.ResponseWriter, r *http.Request, session<"+s.GetId()+">, page<"+p.Title+">)")
 	acs.Active[s.Data["userName"]] = nil
+	p.ActiveSession = nil
+	s = nil
 	return acs.LogoutPage, nil
 }
 

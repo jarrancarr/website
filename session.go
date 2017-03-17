@@ -3,6 +3,7 @@ package website
 type Session struct {
 	Item map[string]interface{}
 	Data map[string]string
+	Cookie bool
 }
 
 func (s *Session) GetLang() string {
@@ -13,7 +14,7 @@ func (s *Session) GetLang() string {
 	return lang
 }
 func createSession() *Session {
-	return &Session{make(map[string]interface{}), make(map[string]string)}
+	return &Session{make(map[string]interface{}), make(map[string]string), false}
 }
 func (s *Session) AddItem(name string, item interface{}) {
 	if s.Item==nil {

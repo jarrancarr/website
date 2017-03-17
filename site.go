@@ -56,27 +56,32 @@ func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Session {
 	logger.Trace.Println("GetCurrentSession(http.ResponseWriter, r *http.Request)")
 	sessionCookie, _ := r.Cookie(site.SiteSessionCookieName)
-	//	cookies := r.Cookies()
-	//	fmt.Printf("found %v cookies\n", len(cookies))
-	//	for _, c := range cookies {
-	//		fmt.Println(c.Name + " = " + c.Value)
-	//	}
 	if sessionCookie != nil && site.UserSession[sessionCookie.Value] != nil {
-		logger.Trace.Println("Valid sessionCookie and user session:"+sessionCookie.Value)
+		logger.Debug.Println("Valid sessionCookie and user session:"+sessionCookie.Value)
+		site.UserSession[sessionCookie.Value].Cookie = true
 		return site.UserSession[sessionCookie.Value]
-	} else {
-		logger.Trace.Println("creating new session");
-		sessionKey := make([]byte, 16)
-		rand.Read(sessionKey)
-		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, base64.URLEncoding.EncodeToString(sessionKey), "/",
-			"localhost", time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
-		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)] = createSession()
-		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["name"] = "Anonymous"
-		site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)].Data["id"] = base64.URLEncoding.EncodeToString(sessionKey)
-
-		return site.UserSession[base64.URLEncoding.EncodeToString(sessionKey)]
 	}
-	return nil
+	urlId := r.URL.Query().Get("_id")
+	if urlId != "" && site.UserSession[urlId] != nil {
+		logger.Debug.Println("got session by urlId="+urlId);
+		return site.UserSession[urlId]
+	}
+	logger.Debug.Println("creating new session");
+	sessionKey := make([]byte, 16)
+	rand.Read(sessionKey)
+	_id := base64.URLEncoding.EncodeToString(sessionKey)
+	site.UserSession[_id] = createSession()
+	site.UserSession[_id].Data["name"] = "Anonymous"
+	site.UserSession[_id].Data["id"] = _id
+	testCookie, _ := r.Cookie("testCookie")
+	if testCookie == nil { // no cookies, switching to URL Id
+		site.UserSession[_id].Cookie = false
+	} else {
+		site.UserSession[_id].Cookie = true
+		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, _id, "/", site.Url, 
+			time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
+	}
+	return site.UserSession[_id]
 }
 func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
 	if site.SiteProcessor == nil {
