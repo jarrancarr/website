@@ -4,14 +4,14 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"html/template"
-	"strconv"
 
 	"github.com/jarrancarr/website/html"
 )
@@ -20,30 +20,30 @@ var ResourceDir = "../../"
 var DataDir = "."
 
 type Site struct {
-	Name, Url	          	string
-	SiteSessionCookieName 	string
-	Tables                	*html.TableStow
-	Html					*html.HTMLStow
-	Pages                 	*PageStow
-	UserSession           	map[string]*Session
-	Service               	map[string]Service
-	SiteProcessor         	map[string]postFunc
-	ParamTriggerHandle    	map[string]postFunc
-	Text                  	map[string][]string
-	Data                  	map[string]interface{}
-	Script                	map[string][]template.JS
-	Param			    	map[string]string
+	Name, Url             string
+	SiteSessionCookieName string
+	Tables                *html.TableStow
+	Html                  *html.HTMLStow
+	Pages                 *PageStow
+	UserSession           map[string]*Session
+	Service               map[string]Service
+	SiteProcessor         map[string]postFunc
+	ParamTriggerHandle    map[string]postFunc
+	Text                  map[string][]string
+	Data                  map[string]interface{}
+	Script                map[string][]template.JS
+	Param                 map[string]string
 }
 
 func CreateSite(name, url string) *Site {
-	site := Site{Name:name, Url:url, 
-				SiteSessionCookieName:name + "-cookie",
-				Tables:&html.TableStow{nil},
-				UserSession:make(map[string]*Session),
-				Text:make(map[string][]string), 
-				Data:make(map[string]interface{}),
-				Script:make(map[string][]template.JS),
-				Html:&html.HTMLStow{nil}}
+	site := Site{Name: name, Url: url,
+		SiteSessionCookieName: name + "-cookie",
+		Tables:                &html.TableStow{nil},
+		UserSession:           make(map[string]*Session),
+		Text:                  make(map[string][]string),
+		Data:                  make(map[string]interface{}),
+		Script:                make(map[string][]template.JS),
+		Html:                  &html.HTMLStow{nil}}
 	return &site
 }
 func (site *Site) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,16 +57,16 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 	logger.Trace.Println("GetCurrentSession(http.ResponseWriter, r *http.Request)")
 	sessionCookie, _ := r.Cookie(site.SiteSessionCookieName)
 	if sessionCookie != nil && site.UserSession[sessionCookie.Value] != nil {
-		logger.Debug.Println("Valid sessionCookie and user session:"+sessionCookie.Value)
+		logger.Trace.Println("Valid sessionCookie and user session:" + sessionCookie.Value)
 		site.UserSession[sessionCookie.Value].Cookie = true
 		return site.UserSession[sessionCookie.Value]
 	}
 	urlId := r.URL.Query().Get("_id")
 	if urlId != "" && site.UserSession[urlId] != nil {
-		logger.Debug.Println("got session by urlId="+urlId);
+		logger.Debug.Println("got session by urlId=" + urlId)
 		return site.UserSession[urlId]
 	}
-	logger.Debug.Println("creating new session");
+	logger.Debug.Println("creating new session")
 	sessionKey := make([]byte, 16)
 	rand.Read(sessionKey)
 	_id := base64.URLEncoding.EncodeToString(sessionKey)
@@ -78,7 +78,7 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 		site.UserSession[_id].Cookie = false
 	} else {
 		site.UserSession[_id].Cookie = true
-		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, _id, "/", site.Url, 
+		http.SetCookie(w, &http.Cookie{site.SiteSessionCookieName, _id, "/", site.Url,
 			time.Now().Add(time.Hour * 24), "", 50000, false, true, "none=none", []string{"none=none"}})
 	}
 	return site.UserSession[_id]
@@ -89,7 +89,8 @@ func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
 	}
 	site.SiteProcessor[name] = initFunc
 }
-func (site *Site) AddPage(title, template, url string) *Page {		logger.Trace.Println();
+func (site *Site) AddPage(title, template, url string) *Page {
+	logger.Trace.Println()
 	page, err := LoadPage(site, title, template, url)
 	if err != nil {
 		fmt.Println(err)
@@ -98,9 +99,11 @@ func (site *Site) AddPage(title, template, url string) *Page {		logger.Trace.Pri
 	if site.Pages == nil {
 		site.Pages = &PageStow{nil}
 	}
-	if title == "" {		logger.Trace.Println(template);
+	if title == "" {
+		logger.Trace.Println(template)
 		site.Pages.AddPage(template, page)
-	} else {		logger.Trace.Println(title);
+	} else {
+		logger.Trace.Println(title)
 		site.Pages.AddPage(title, page)
 	}
 	return page
@@ -128,20 +131,20 @@ func (site *Site) AddBody(name, line string) *Site {
 		if quotes {
 			stringbuild += " " + item
 			if strings.HasSuffix(item, "\"") {
-				site.Text[name] = append(site.Text[name],stringbuild[:len(stringbuild)-1])
+				site.Text[name] = append(site.Text[name], stringbuild[:len(stringbuild)-1])
 				quotes = false
 			}
 		} else if strings.HasPrefix(item, "\"") {
 			quotes = true
 			stringbuild = item[1:]
 		} else {
-			site.Text[name] = append(site.Text[name],item)
+			site.Text[name] = append(site.Text[name], item)
 		}
 	}
 	return site
 }
 func (site *Site) AddParam(name, data string) *Site {
-	if (site.Param==nil) {
+	if site.Param == nil {
 		site.Param = make(map[string]string)
 	}
 	site.Param[name] = data
@@ -160,10 +163,10 @@ func (site *Site) Item(lang string, name ...string) template.CSS {
 	var err error
 	if len(name) == 1 {
 		return template.CSS(site.fullBody(lang, name[0]))
-	} 
+	}
 	item = site.Text[name[0]]
-	if strings.HasPrefix(name[1],"Body:") {
-		index, err = strconv.ParseInt(site.Text[strings.Split(name[1],":")[1]][0], 10, 64)
+	if strings.HasPrefix(name[1], "Body:") {
+		index, err = strconv.ParseInt(site.Text[strings.Split(name[1], ":")[1]][0], 10, 64)
 	} else {
 		index, err = strconv.ParseInt(name[1], 10, 64)
 	}
@@ -186,7 +189,9 @@ func (site *Site) GetScript(param ...string) []template.JS {
 }
 func (site *Site) fullBody(lang, name string) string {
 	whole := ""
-	for _, s := range site.Text[name] { whole += " "+s }
+	for _, s := range site.Text[name] {
+		whole += " " + s
+	}
 	return whole[1:]
 }
 func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
