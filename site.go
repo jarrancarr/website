@@ -213,7 +213,7 @@ func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	site.ServeHTTP(w, r)
 }
 func ServeResource(w http.ResponseWriter, r *http.Request) {
-	logger.Trace.Println("ServeResource()")
+	logger.Debug.Println("ServeResource(" + r.URL.Path + ")")
 	path := ResourceDir + "/public" + r.URL.Path
 	if strings.HasSuffix(r.URL.Path, "js") {
 		w.Header().Add("Content-Type", "application/javascript")
@@ -232,6 +232,7 @@ func ServeResource(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		w.Write(data)
 	} else {
+		logger.Debug.Println(err)
 		w.WriteHeader(404)
 		w.Write([]byte("404, My Friend - " + http.StatusText(404)))
 	}

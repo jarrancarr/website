@@ -84,36 +84,42 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 
 	page := &Page{Title: title, Status: "OK", Text: text, Site: site, Param: make(map[string]string), Html: &html.HTMLStow{nil}}
 	subName := tmplName
-	for ;strings.Contains(subName,"/"); {
-		subName = subName[strings.Index(subName,"/")+1:]
+	for strings.Contains(subName, "/") {
+		subName = subName[strings.Index(subName, "/")+1:]
 	}
 	page.tmpl = template.Must(template.New(subName + ".html").Funcs(
 		template.FuncMap{
-			"table":   page.table,
-			"css":     page.css,
-			"script":  page.Site.GetScript,
-			"service": page.service,
-			"session": page.session,
-			"get":     page.get,
-			"metrics": page.metrics,
-			"page":    page.page,
-			"debug":   page.debug,
-			"html":    page.getHtml,
-			"htmls":   page.getHtmls,
-			"text":    page.text,
-			"list":    page.list,
-			"line":    page.line,
-			"data":    page.data,
-			"param":   page.getParam,
-			"paramInt":page.getParamInt,
-			"ajax":    page.ajax,
-			"target":  page.target,
-			"add":	   func(i,j int) int { return i + j },
-			"minus":   func(i,j int) int { return i - j },
-			"times":   func(i,j int) int { return i * j },
-			"over":    func(i,j int) int { return i / j },
-			"max":     func(i,j int) int { if i>j { return i } else { return j }},
-			}).
+			"table":    page.table,
+			"css":      page.css,
+			"script":   page.Site.GetScript,
+			"service":  page.service,
+			"session":  page.session,
+			"get":      page.get,
+			"metrics":  page.metrics,
+			"page":     page.page,
+			"debug":    page.debug,
+			"html":     page.getHtml,
+			"htmls":    page.getHtmls,
+			"text":     page.text,
+			"list":     page.list,
+			"line":     page.line,
+			"data":     page.data,
+			"param":    page.getParam,
+			"paramInt": page.getParamInt,
+			"ajax":     page.ajax,
+			"target":   page.target,
+			"add":      func(i, j int) int { return i + j },
+			"minus":    func(i, j int) int { return i - j },
+			"times":    func(i, j int) int { return i * j },
+			"over":     func(i, j int) int { return i / j },
+			"max": func(i, j int) int {
+				if i > j {
+					return i
+				} else {
+					return j
+				}
+			},
+		}).
 		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
@@ -298,7 +304,7 @@ func (page *Page) table(name string) template.HTML {
 	return template.HTML(page.tables.Ts[name].Render())
 }
 func (page *Page) page(name ...string) template.HTML {
-	logger.Trace.Println(strings.Join(name,"'"))
+	logger.Trace.Println(strings.Join(name, "'"))
 	if page.pages == nil || page.pages.Ps == nil || page.pages.Ps[name[0]] == nil {
 		if page.Site.Pages == nil || page.Site.Pages.Ps == nil || page.Site.Pages.Ps[name[0]] == nil {
 			return template.HTML("<h1>Empty page</h1>")
@@ -406,6 +412,8 @@ func (page *Page) session(data ...string) interface{} {
 		return "no session"
 	}
 	switch data[0] {
+	case "data":
+		return page.ActiveSession.Data[data[1]]
 	case "param":
 		return page.ActiveSession.Data[data[1]]
 	case "item":
@@ -494,7 +502,7 @@ func (page *Page) getScript(data ...string) template.JS   { return template.JS(p
 func (page *Page) service(data ...string) template.HTML { // calls the service by its registered name
 	logger.Trace.Println("service(" + strings.Join(data, ",") + ")")
 	if page.Site.Service[data[0]] == nil {
-		logger.Error.Println("No service:"+data[0]+" found!")
+		logger.Error.Println("No service:" + data[0] + " found!")
 		return template.HTML("")
 	}
 	return template.HTML(page.Site.Service[data[0]].Execute(data[1:], page.ActiveSession, page))
@@ -504,12 +512,12 @@ func (page *Page) get(data ...string) Item { // retireves an Item(interface{}) O
 	return page.Site.Service[data[0]].Get(page, page.ActiveSession, data[1:])
 }
 func (page *Page) metrics(data ...string) int {
-	return 0;
+	return 0
 }
 func (page *Page) getParam(name string) string { // returns a page's named paramater
 	logger.Trace.Println("getParam(" + name + ")")
 	if page.Param == nil || page.Param[name] == "" {
-		
+
 		return ""
 	}
 	return page.Param[name]

@@ -5,13 +5,14 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/jarrancarr/website"
-	"fmt"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/jarrancarr/website"
 )
 
 var (
@@ -48,7 +49,7 @@ func CreateService(acs *website.AccountService) *MessageService {
 }
 func (mss *MessageService) Execute(data []string, s *website.Session, p *website.Page) string {
 	mss.lock.Lock()
-	Logger.Trace.Println("MessageService.Execute("+data[0]+", page<>)")
+	Logger.Trace.Println("MessageService.Execute(" + data[0] + ", page<>)")
 	switch data[0] {
 	case "roomList":
 		return mss.roomList(s)
@@ -68,8 +69,7 @@ func (mss *MessageService) Execute(data []string, s *website.Session, p *website
 		return "ok"
 	case "#activeRooms":
 		mss.lock.Unlock()
-		return fmt.Sprintf("%d",len(mss.room))
-		break;
+		return fmt.Sprintf("%d", len(mss.room))
 	}
 	mss.lock.Unlock()
 	return "huh?"
@@ -78,14 +78,18 @@ func (mss *MessageService) Status() string {
 	return "good"
 }
 func (mss *MessageService) Metrics(what ...string) int {
-	switch(what[0]) {
-		case "rooms": return len(mss.room)
-		case "totalMessages": return 0
-		case "room": 
-			switch(what[2]) {
-				case "messages": return len(mss.room[what[1]].message)
-				case "members": return len(mss.room[what[1]].member)
-			}
+	switch what[0] {
+	case "rooms":
+		return len(mss.room)
+	case "totalMessages":
+		return 0
+	case "room":
+		switch what[2] {
+		case "messages":
+			return len(mss.room[what[1]].message)
+		case "members":
+			return len(mss.room[what[1]].member)
+		}
 	}
 	return 0
 }
@@ -110,7 +114,7 @@ func (mss *MessageService) exitRoom(r *Room, s *website.Session) {
 	}
 }
 func (room *Room) post(author, message string) {
-	Logger.Trace.Println("MessageService.post("+author+", "+message+")")
+	Logger.Trace.Println("MessageService.post(" + author + ", " + message + ")")
 	room.lock.Lock()
 	m := Message{message, author, time.Now(), false, nil}
 	room.message = append(room.message, &m)
@@ -140,7 +144,8 @@ func (room *Room) getDiscussion(userName string) string {
 	room.lock.Unlock()
 	return discussion
 }
-func (room *Room) WhoseThere() string {	
+
+func (room *Room) WhoseThere() string {
 	Logger.Debug.Println("room.WhoseThere()")
 	room.lock.Lock()
 	who := "["
@@ -151,7 +156,7 @@ func (room *Room) WhoseThere() string {
 		} else {
 			first = false
 		}
-		who += `["`+m.GetFullName()+`","`+m.GetUserName()+`"]`
+		who += `["` + m.GetFullName() + `","` + m.GetUserName() + `"]`
 	}
 	who += "]"
 	room.lock.Unlock()
@@ -182,54 +187,72 @@ func (mss *MessageService) roomList(s *website.Session) string {
 	roomList += `} }`
 	return roomList
 }
-func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
-	Logger.Trace.Println("MessageService.Get(page<"+p.Title+">, session<"+s.GetUserName()+">, "+strings.Join(data,"|")+")")
-	
-	switch data[0] {
-		case "getAllRooms":
-			var answ []interface{}
-			mss.lock.Lock()
-			for name, room := range(mss.room) {
-				answ = append(answ, struct { 
-					Name string
-					Messages, Occupance int
-				}{
-					name,
-					len(room.message),
-					len(room.member),
-				} )
+func (mss *MessageService) conversations(s *website.Session, roomlist []string) string {
+	Logger.Trace.Println("mss.conversations(<" + s.GetId() + "> *website.Session, [" + strings.Join(roomlist, ",") + "])")
+	roomList := `{ "conversations":{`
+	first := true
+	for _, room := range roomlist {
+		if mss.room[room] != nil {
+			if !first {
+				roomList += ","
+			} else {
+				first = false
 			}
-			mss.lock.Unlock()
-			return answ
-		case "occupance":
-			var answ []interface{}
-			mss.room[data[1]].lock.Lock()
-			for _, occupant := range(mss.room[data[1]].member) {
-				answ = append(answ, struct { 
-					Name, UserName string
-				}{
-					occupant.Data["name"],
-					occupant.Data["userName"],
-				} )
-			}
-			mss.room[data[1]].lock.Unlock()
-			return answ
-		case "getMessages":
-			var answ []interface{}
-			mss.room[data[1]].lock.Lock()
-			for _, message := range(mss.room[data[1]].message) {
-				answ = append(answ, struct { 
-					TimeStamp, Author, Message string
-				}{
-					message.timestamp.Format("15:04:05.000"),
-					message.author,
-					message.message,
-				} )
-			}
-			mss.room[data[1]].lock.Unlock()
-			return answ
+			roomList += `"` + room + `":` + mss.room[room].getDiscussion(s.GetFullName())
+		}
 	}
-	
+	roomList += `,"family":` + mss.room[s.GetData("userName")].getDiscussion(s.GetFullName())
+	roomList += `} }`
+	return roomList
+}
+func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
+	Logger.Trace.Println("MessageService.Get(page<" + p.Title + ">, session<" + s.GetUserName() + ">, " + strings.Join(data, "|") + ")")
+
+	switch data[0] {
+	case "getAllRooms":
+		var answ []interface{}
+		mss.lock.Lock()
+		for name, room := range mss.room {
+			answ = append(answ, struct {
+				Name                string
+				Messages, Occupance int
+			}{
+				name,
+				len(room.message),
+				len(room.member),
+			})
+		}
+		mss.lock.Unlock()
+		return answ
+	case "occupance":
+		var answ []interface{}
+		mss.room[data[1]].lock.Lock()
+		for _, occupant := range mss.room[data[1]].member {
+			answ = append(answ, struct {
+				Name, UserName string
+			}{
+				occupant.Data["name"],
+				occupant.Data["userName"],
+			})
+		}
+		mss.room[data[1]].lock.Unlock()
+		return answ
+	case "getMessages":
+		var answ []interface{}
+		mss.room[data[1]].lock.Lock()
+		for _, message := range mss.room[data[1]].message {
+			answ = append(answ, struct {
+				TimeStamp, Author, Message string
+			}{
+				message.timestamp.Format("15:04:05.000"),
+				message.author,
+				message.message,
+			})
+		}
+		mss.room[data[1]].lock.Unlock()
+		return answ
+	}
+
 	t := "Duke"
 	n := "Bingo"
 	d := "The Man!"
@@ -241,21 +264,34 @@ func (mss *MessageService) Get(p *website.Page, s *website.Session, data []strin
 }
 func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
-	httpData, _ :=ioutil.ReadAll(r.Body)
-	if (httpData == nil || len(httpData) == 0) {
+	httpData, _ := ioutil.ReadAll(r.Body)
+	if httpData == nil || len(httpData) == 0 {
 		return "", errors.New("No Data")
 	}
-	dataList := strings.Split(string(httpData),"&")
-	roomName := strings.Split(dataList[0],"=")[1]
-	roomPass := strings.Split(dataList[1],"=")[1]
-	Logger.Debug.Println("new room is "+roomName+" with password:"+roomPass)
-	mss.createRoom(roomName,roomPass,s)
+	dataList := strings.Split(string(httpData), "&")
+	roomName := strings.Split(dataList[0], "=")[1]
+	roomPass := strings.Split(dataList[1], "=")[1]
+	Logger.Debug.Println("new room is " + roomName + " with password:" + roomPass)
+	mss.createRoom(roomName, roomPass, s)
 	w.Write([]byte(mss.roomList(s)))
 	return "ok", nil
 }
 func (mss *MessageService) GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
 	w.Write([]byte(mss.roomList(s)))
+	return "ok", nil
+}
+func (mss *MessageService) GetConversationsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	Logger.Trace.Println("mss.GetConversationsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
+	data := website.PullData(r)
+	x := data["rooms"].([]interface{})
+	list := make([]string, len(x))
+	for i := 0; i < len(x); i++ {
+		list[i] = x[i].(string)
+	}
+	list = append(list, "family")
+	conv := mss.conversations(s, list)
+	w.Write([]byte(conv))
 	return "ok", nil
 }
 func (mss *MessageService) ExitRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
@@ -281,6 +317,9 @@ func (mss *MessageService) MessageAJAXHandler(w http.ResponseWriter, r *http.Req
 	message, _ := url.QueryUnescape(strings.Split(dataList[1], "=")[1])
 	unencodedMessage, _ := url.QueryUnescape(message)
 
+	if roomName == "" || mss.room[roomName] == nil {
+		return "", errors.New("Invalid room name")
+	}
 	mss.room[roomName].post(p.ActiveSession.GetFullName(), unencodedMessage)
 
 	//Logger.Debug.Println("User:" + p.ActiveSession.GetFullName() + " from Room: " + roomName + "  <<" + unencodedMessage + ">>")
