@@ -33,6 +33,7 @@ type Room struct {
 }
 type MessageService struct {
 	room map[string]*Room
+	hook []website.PostFunc
 	acs  *website.AccountService
 	lock sync.Mutex
 }
@@ -44,7 +45,7 @@ type PersonalMessageQueue struct {
 
 func CreateService(acs *website.AccountService) *MessageService {
 	Logger.Trace.Println()
-	mss := MessageService{make(map[string]*Room), acs, sync.Mutex{}}
+	mss := MessageService{make(map[string]*Room), nil, acs, sync.Mutex{}}
 	return &mss
 }
 func (mss *MessageService) Execute(data []string, s *website.Session, p *website.Page) string {
@@ -103,6 +104,12 @@ func (mss *MessageService) createRoom(name, passCode string, s *website.Session)
 		mss.join(mss.room[name], s)
 	}
 }
+func (mss *MessageService) AddHook(h website.PostFunc) {
+	if mss.hook == nil {
+		mss.hook = make([]website.PostFunc,1)
+	}
+	mss.hook = append(mss.hook, h)
+}
 func (mss *MessageService) join(r *Room, s *website.Session) {
 	r.member = append(r.member, s)
 }
@@ -144,7 +151,6 @@ func (room *Room) getDiscussion(userName string) string {
 	room.lock.Unlock()
 	return discussion
 }
-
 func (room *Room) WhoseThere() string {
 	Logger.Debug.Println("room.WhoseThere()")
 	room.lock.Lock()
@@ -201,8 +207,10 @@ func (mss *MessageService) conversations(s *website.Session, roomlist []string) 
 			roomList += `"` + room + `":` + mss.room[room].getDiscussion(s.GetFullName())
 		}
 	}
-	roomList += `,"family":` + mss.room[s.GetData("userName")].getDiscussion(s.GetFullName())
-	roomList += `} }`
+	roomList += `,"family":` + mss.room[s.GetData("userName")].getDiscussion(s.GetFullName()) + `} `
+	roomList += `,"notifications":` + s.GetData("notifications") + `} `	
+	s.AddData("notifications", "[]")
+	
 	return roomList
 }
 func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
@@ -263,18 +271,12 @@ func (mss *MessageService) Get(p *website.Page, s *website.Session, data []strin
 	}
 }
 func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
-	Logger.Trace.Println("mss.AddRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
-	httpData, _ := ioutil.ReadAll(r.Body)
-	if httpData == nil || len(httpData) == 0 {
-		return "", errors.New("No Data")
-	}
-	dataList := strings.Split(string(httpData), "&")
-	roomName := strings.Split(dataList[0], "=")[1]
-	roomPass := strings.Split(dataList[1], "=")[1]
-	Logger.Debug.Println("new room is " + roomName + " with password:" + roomPass)
-	mss.createRoom(roomName, roomPass, s)
+	Logger.Debug.Println("CreateRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
+	_, httpData := website.PullData(r)
+	Logger.Debug.Println("new room is " + httpData["roomName"] + " with password:" + httpData["roomPass"])
+	mss.createRoom(httpData["roomName"], httpData["roomPass"], s)
 	w.Write([]byte(mss.roomList(s)))
-	return "ok", nil
+	return mss.processHooks(w,r,s,p)
 }
 func (mss *MessageService) GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
@@ -283,16 +285,20 @@ func (mss *MessageService) GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Re
 }
 func (mss *MessageService) GetConversationsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.GetConversationsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
-	data := website.PullData(r)
-	x := data["rooms"].([]interface{})
-	list := make([]string, len(x))
-	for i := 0; i < len(x); i++ {
-		list[i] = x[i].(string)
+	obj, _ := website.PullData(r)
+	s.Item["config"] = obj["config"]
+	if obj["rooms"] == nil {
+		return mss.processHooks(w,r,s,p)
+	}
+	room := obj["rooms"].([]interface{})
+	list := make([]string, len(room))
+	for i := 0; i < len(room); i++ {
+		list[i] = room[i].(string)
 	}
 	list = append(list, "family")
 	conv := mss.conversations(s, list)
 	w.Write([]byte(conv))
-	return "ok", nil
+	return mss.processHooks(w,r,s,p)
 }
 func (mss *MessageService) ExitRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.ExitRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
@@ -322,14 +328,28 @@ func (mss *MessageService) MessageAJAXHandler(w http.ResponseWriter, r *http.Req
 	}
 	mss.room[roomName].post(p.ActiveSession.GetFullName(), unencodedMessage)
 
-	//Logger.Debug.Println("User:" + p.ActiveSession.GetFullName() + " from Room: " + roomName + "  <<" + unencodedMessage + ">>")
-
 	w.Write([]byte(mss.room[roomName].getDiscussion(p.ActiveSession.GetFullName())))
-	return "ok", nil
+	return mss.processHooks(w,r,s,p)
 }
 func (mss *MessageService) GetRoom(roomName string) (*Room, error) {
 	if mss.room[roomName] == nil {
 		return nil, errors.New("No room by that name")
 	}
 	return mss.room[roomName], nil
+}
+func (mss *MessageService) processHooks(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
+	if mss.hook == nil {
+		return "ok", nil
+	}
+	for _, pFunc := range mss.hook {
+		if pFunc == nil {
+			continue
+		}
+		status, err := pFunc(w, r, s, p)
+		if status != "ok" {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return "", err
+		}
+	}
+	return "ok", nil
 }

@@ -13,8 +13,8 @@ var (
 	logger *Log
 )
 
-type postFunc func(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error)
-type filterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
+type PostFunc func(w http.ResponseWriter, r *http.Request, s *Session, p *Page) (string, error)
+//type FilterFunc func(w http.ResponseWriter, r *http.Request, s *Session) (string, error)
 
 type Item interface{}
 
@@ -38,18 +38,25 @@ func NewLog(traceHandle io.Writer, debugHandle io.Writer, infoHandle io.Writer, 
 	return logger
 }
 
-func PullData(r *http.Request) map[string]interface{} {
+func PullData(r *http.Request) (map[string]interface{}, map[string]string) {
 	logger.Trace.Println("pullData(r *http.Request)")
 	httpData, _ := ioutil.ReadAll(r.Body)
 	if httpData == nil || len(httpData) == 0 {
-		return nil
+		return nil, nil
 	}
 	reader := bytes.NewReader(httpData)
-	mapData := new(map[string]interface{})
-	if err := json.NewDecoder(reader).Decode(mapData); err != nil {
+	var mapObjects map[string]interface{}
+	var mapData map[string]string
+	if err := json.NewDecoder(reader).Decode(&mapObjects); err != nil {
 		logger.Error.Println("error decoding json string: " + string(httpData))
 		logger.Error.Println(err)
-		return nil
+		return nil, nil
 	}
-	return *mapData
+	for k, v := range mapObjects  {
+		_, ok := v.(string)
+		if ok {
+			mapData[k] = v.(string)
+		}
+	}
+	return mapObjects, mapData
 }

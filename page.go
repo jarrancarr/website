@@ -24,13 +24,13 @@ type Page struct {
 	Parent              *Page               // parent page
 	pages               *PageStow           // sub pages
 	tables              *html.TableStow     // tables
-	paramTriggerHandle  map[string]postFunc // functions executed with URL parameters
-	postHandle          map[string]postFunc // functions executed from a post request
-	ajaxHandle          map[string]postFunc // functions that respond to AJAX requests
+	paramTriggerHandle  map[string]PostFunc // functions executed with URL parameters
+	postHandle          map[string]PostFunc // functions executed from a post request
+	ajaxHandle          map[string]PostFunc // functions that respond to AJAX requests
 	tmpl                *template.Template  // this pages HTML template
-	initProcessor       []postFunc          // initial processors before site processors
-	preProcessor        []postFunc          // processors after site processors
-	postProcessor       []postFunc          // processors after page
+	initProcessor       []PostFunc          // initial processors before site processors
+	preProcessor        []PostFunc          // processors after site processors
+	postProcessor       []PostFunc          // processors after page
 	bypassSiteProcessor map[string]bool     // any site processor to not precess for this page
 	ActiveSession       *Session
 	pageLock            sync.Mutex
@@ -261,34 +261,34 @@ func (page *Page) AddData(name string, data interface{}) *Page {
 	page.Data[name] = data
 	return page
 }
-func (page *Page) AddPostHandler(name string, handle postFunc) *Page {
+func (page *Page) AddPostHandler(name string, handle PostFunc) *Page {
 	if page.postHandle == nil {
-		page.postHandle = make(map[string]postFunc)
+		page.postHandle = make(map[string]PostFunc)
 	}
 	page.postHandle[name] = handle
 	return page
 }
-func (page *Page) AddParamTriggerHandler(name string, handle postFunc) *Page {
+func (page *Page) AddParamTriggerHandler(name string, handle PostFunc) *Page {
 	if page.paramTriggerHandle == nil {
-		page.paramTriggerHandle = make(map[string]postFunc)
+		page.paramTriggerHandle = make(map[string]PostFunc)
 	}
 	page.paramTriggerHandle[name] = handle
 	return page
 }
-func (page *Page) AddAJAXHandler(name string, handle postFunc) *Page {
+func (page *Page) AddAJAXHandler(name string, handle PostFunc) *Page {
 	if page.ajaxHandle == nil {
-		page.ajaxHandle = make(map[string]postFunc)
+		page.ajaxHandle = make(map[string]PostFunc)
 	}
 	page.ajaxHandle[name] = handle
 	return page
 }
-func (page *Page) AddInitProcessor(initFunc postFunc) {
+func (page *Page) AddInitProcessor(initFunc PostFunc) {
 	page.initProcessor = append(page.initProcessor, initFunc)
 }
-func (page *Page) AddPreProcessor(initFunc postFunc) {
+func (page *Page) AddPreProcessor(initFunc PostFunc) {
 	page.preProcessor = append(page.preProcessor, initFunc)
 }
-func (page *Page) AddPostProcessor(initFunc postFunc) {
+func (page *Page) AddPostProcessor(initFunc PostFunc) {
 	page.postProcessor = append(page.postProcessor, initFunc)
 }
 func (page *Page) AddBypassSiteProcessor(name string) {

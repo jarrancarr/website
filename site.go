@@ -27,8 +27,8 @@ type Site struct {
 	Pages                 *PageStow
 	UserSession           map[string]*Session
 	Service               map[string]Service
-	SiteProcessor         map[string]postFunc
-	ParamTriggerHandle    map[string]postFunc
+	SiteProcessor         map[string]PostFunc
+	ParamTriggerHandle    map[string]PostFunc
 	Text                  map[string][]string
 	Data                  map[string]interface{}
 	Script                map[string][]template.JS
@@ -83,9 +83,9 @@ func (site *Site) GetCurrentSession(w http.ResponseWriter, r *http.Request) *Ses
 	}
 	return site.UserSession[_id]
 }
-func (site *Site) AddSiteProcessor(name string, initFunc postFunc) {
+func (site *Site) AddSiteProcessor(name string, initFunc PostFunc) {
 	if site.SiteProcessor == nil {
-		site.SiteProcessor = make(map[string]postFunc)
+		site.SiteProcessor = make(map[string]PostFunc)
 	}
 	site.SiteProcessor[name] = initFunc
 }
@@ -150,9 +150,9 @@ func (site *Site) AddParam(name, data string) *Site {
 	site.Param[name] = data
 	return site
 }
-func (site *Site) AddParamTriggerHandler(name string, handle postFunc) *Site {
+func (site *Site) AddParamTriggerHandler(name string, handle PostFunc) *Site {
 	if site.ParamTriggerHandle == nil {
-		site.ParamTriggerHandle = make(map[string]postFunc)
+		site.ParamTriggerHandle = make(map[string]PostFunc)
 	}
 	site.ParamTriggerHandle[name] = handle
 	return site
@@ -194,18 +194,18 @@ func (site *Site) fullBody(lang, name string) string {
 	}
 	return whole[1:]
 }
-func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
+func (site *Site) Upload(w http.ResponseWriter, r *http.Request) {
 	logger.Trace.Println("upload()")
 	r.ParseMultipartForm(32 << 20)
-	file, handler, err := r.FormFile("uploadfile")
+	file, handler, err := r.FormFile("newPhoto")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	defer file.Close()
-	f, err := os.OpenFile("../../temp/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+	f, err := os.OpenFile("../temp/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error.Println(err)
 		return
 	}
 	defer f.Close()
@@ -213,7 +213,7 @@ func (site *Site) upload(w http.ResponseWriter, r *http.Request) {
 	site.ServeHTTP(w, r)
 }
 func ServeResource(w http.ResponseWriter, r *http.Request) {
-	logger.Debug.Println("ServeResource(" + r.URL.Path + ")")
+	logger.Trace.Println("ServeResource(" + r.URL.Path + ")")
 	path := ResourceDir + "/public" + r.URL.Path
 	if strings.HasSuffix(r.URL.Path, "js") {
 		w.Header().Add("Content-Type", "application/javascript")
