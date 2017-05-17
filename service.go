@@ -55,6 +55,9 @@ func PullData(r *http.Request) (map[string]interface{}, map[string]string) {
 	for k, v := range mapObjects  {
 		_, ok := v.(string)
 		if ok {
+			if mapData == nil {
+				mapData = make(map[string]string)
+			}
 			mapData[k] = v.(string)
 		}
 	}
