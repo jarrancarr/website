@@ -108,19 +108,28 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"paramInt": page.getParamInt,
 			"ajax":     page.ajax,
 			"target":   page.target,
+			"for":		func(i int) (stream chan int) { 
+							stream = make(chan int) 
+							go func() {
+			        			for iter := 0; iter <= i; iter++ {
+			            			stream <- iter
+			        			}
+			        			close(stream)
+			    			}()
+			    			return
+						},
 			"add":      func(i, j int) int { return i + j },
 			"minus":    func(i, j int) int { return i - j },
 			"times":    func(i, j int) int { return i * j },
 			"over":     func(i, j int) int { return i / j },
-			"max": func(i, j int) int {
-				if i > j {
-					return i
-				} else {
-					return j
-				}
-			},
-		}).
-		ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
+			"max": 		func(i, j int) int {
+							if i > j {
+								return i
+							} else {
+								return j
+							}
+						},
+		}).ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
 	}
