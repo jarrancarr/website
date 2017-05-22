@@ -43,7 +43,7 @@ type PersonalMessageQueue struct {
 	lastPost int
 }
 
-func CreateService(acs *website.AccountService) *MessageService {
+func CreateMessageService(acs *website.AccountService) *MessageService {
 	Logger.Trace.Println()
 	mss := MessageService{make(map[string]*Room), nil, acs, sync.Mutex{}}
 	return &mss
@@ -106,7 +106,7 @@ func (mss *MessageService) createRoom(name, passCode string, s *website.Session)
 }
 func (mss *MessageService) AddHook(h website.PostFunc) {
 	if mss.hook == nil {
-		mss.hook = make([]website.PostFunc,1)
+		mss.hook = make([]website.PostFunc, 1)
 	}
 	mss.hook = append(mss.hook, h)
 }
@@ -114,6 +114,9 @@ func (mss *MessageService) join(r *Room, s *website.Session) {
 	r.member = append(r.member, s)
 }
 func (mss *MessageService) exitRoom(r *Room, s *website.Session) {
+	if r == nil {
+		return
+	}
 	for idx, asdf := range r.member {
 		if asdf == s {
 			r.member = append(r.member[:idx], r.member[idx+1:]...)
@@ -208,9 +211,9 @@ func (mss *MessageService) conversations(s *website.Session, roomlist []string) 
 		}
 	}
 	roomList += `,"family":` + mss.room[s.GetData("userName")].getDiscussion(s.GetFullName()) + `} `
-	roomList += `,"notifications":` + s.GetData("notifications") + `} `	
+	roomList += `,"notifications":` + s.GetData("notifications") + `} `
 	s.AddData("notifications", "[]")
-	
+
 	return roomList
 }
 func (mss *MessageService) Get(p *website.Page, s *website.Session, data []string) website.Item {
@@ -276,7 +279,7 @@ func (mss *MessageService) CreateRoomAJAXHandler(w http.ResponseWriter, r *http.
 	Logger.Debug.Println("new room is " + httpData["roomName"] + " with password:" + httpData["roomPass"])
 	mss.createRoom(httpData["roomName"], httpData["roomPass"], s)
 	w.Write([]byte(mss.roomList(s)))
-	return mss.processHooks(w,r,s,p)
+	return mss.processHooks(w, r, s, p)
 }
 func (mss *MessageService) GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.GetRoomsAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
@@ -288,7 +291,7 @@ func (mss *MessageService) GetConversationsAJAXHandler(w http.ResponseWriter, r 
 	obj, _ := website.PullData(r)
 	s.Item["config"] = obj["config"]
 	if obj["rooms"] == nil {
-		return mss.processHooks(w,r,s,p)
+		return mss.processHooks(w, r, s, p)
 	}
 	room := obj["rooms"].([]interface{})
 	list := make([]string, len(room))
@@ -298,7 +301,7 @@ func (mss *MessageService) GetConversationsAJAXHandler(w http.ResponseWriter, r 
 	list = append(list, "family")
 	conv := mss.conversations(s, list)
 	w.Write([]byte(conv))
-	return mss.processHooks(w,r,s,p)
+	return mss.processHooks(w, r, s, p)
 }
 func (mss *MessageService) ExitRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page) (string, error) {
 	Logger.Trace.Println("mss.ExitRoomAJAXHandler(w http.ResponseWriter, r *http.Request, s *website.Session, p *website.Page)")
@@ -329,7 +332,7 @@ func (mss *MessageService) MessageAJAXHandler(w http.ResponseWriter, r *http.Req
 	mss.room[roomName].post(p.ActiveSession.GetFullName(), unencodedMessage)
 
 	w.Write([]byte(mss.room[roomName].getDiscussion(p.ActiveSession.GetFullName())))
-	return mss.processHooks(w,r,s,p)
+	return mss.processHooks(w, r, s, p)
 }
 func (mss *MessageService) GetRoom(roomName string) (*Room, error) {
 	if mss.room[roomName] == nil {

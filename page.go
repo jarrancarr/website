@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -108,27 +109,40 @@ func LoadPage(site *Site, title, tmplName, url string) (*Page, error) {
 			"paramInt": page.getParamInt,
 			"ajax":     page.ajax,
 			"target":   page.target,
-			"for":		func(i int) (stream chan int) { 
-							stream = make(chan int) 
-							go func() {
-			        			for iter := 0; iter <= i; iter++ {
-			            			stream <- iter
-			        			}
-			        			close(stream)
-			    			}()
-			    			return
-						},
-			"add":      func(i, j int) int { return i + j },
-			"minus":    func(i, j int) int { return i - j },
-			"times":    func(i, j int) int { return i * j },
-			"over":     func(i, j int) int { return i / j },
-			"max": 		func(i, j int) int {
-							if i > j {
-								return i
-							} else {
-								return j
-							}
-						},
+			"for": func(i, j int) (stream chan int) {
+				stream = make(chan int)
+				go func() {
+					for iter := i; iter <= j; iter++ {
+						stream <- iter
+					}
+					close(stream)
+				}()
+				return
+			},
+			"toString": func(value interface{}) string {
+				switch v := value.(type) {
+				case string:
+					return v
+				case int:
+					return strconv.Itoa(v)
+				default:
+					return ""
+				}
+			},
+			"random": func(low, high int) string {
+				return strconv.Itoa(low + rand.Intn(high-low))
+			},
+			"add":   func(i, j int) int { return i + j },
+			"minus": func(i, j int) int { return i - j },
+			"times": func(i, j int) int { return i * j },
+			"over":  func(i, j int) int { return i / j },
+			"max": func(i, j int) int {
+				if i > j {
+					return i
+				} else {
+					return j
+				}
+			},
 		}).ParseFiles(ResourceDir + "/templates/" + tmplName + ".html"))
 	if url != "" {
 		http.HandleFunc(url, page.ServeHTTP)
